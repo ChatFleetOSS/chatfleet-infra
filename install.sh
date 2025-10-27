@@ -1,7 +1,13 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-INSTALL_DIR="${INSTALL_DIR:-/opt/chatfleet-infra}"
+# Install location
+# Default to user home for least-privilege installs; set USE_SYSTEM=1 to opt into /opt
+if [ "${USE_SYSTEM:-0}" = "1" ]; then
+  INSTALL_DIR="${INSTALL_DIR:-/opt/chatfleet-infra}"
+else
+  INSTALL_DIR="${INSTALL_DIR:-$HOME/chatfleet-infra}"
+fi
 API_TAG_DEFAULT="${API_TAG:-latest}"
 WEB_TAG_DEFAULT="${WEB_TAG:-latest}"
 INSTALL_DOCKER="${INSTALL_DOCKER:-0}"
@@ -55,8 +61,7 @@ ensure_repo() {
         GROUP_NAME=$(id -gn "$USER" 2>/dev/null || echo "staff")
         sudo chown -R "$USER":"$GROUP_NAME" "$INSTALL_DIR"
       else
-        die "sudo not available; cannot create $INSTALL_DIR. Set INSTALL_DIR=
-$HOME/chatfleet-infra and re-run."
+        die "sudo not available; cannot create $INSTALL_DIR. Try: INSTALL_DIR=\"$HOME/chatfleet-infra\" bash -c '<installer>'"
       fi
     fi
     git clone https://github.com/ChatFleetOSS/chatfleet-infra "$INSTALL_DIR"
@@ -81,15 +86,33 @@ ensure_env() {
   else
     log ".env already exists; not modifying"
   fi
-  # Ensure default image tags are present so compose doesn't see blanks (works with sudo too)
-  if ! grep -q '^API_TAG=' .env; then echo "API_TAG=${API_TAG_DEFAULT}" >> .env; fi
-  if ! grep -q '^WEB_TAG=' .env; then echo "WEB_TAG=${WEB_TAG_DEFAULT}" >> .env; fi
+  # Resolve tags: prefer provided API_TAG/WEB_TAG; otherwise try latest GitHub release; fallback to 'latest'
+  resolve_tag() {
+    local repo="$1"
+    local fallback="$2"
+    local t
+    # Query GitHub latest release tag (no jq dependency)
+    t=$(curl -fsSL "https://api.github.com/repos/${repo}/releases/latest" 2>/dev/null | sed -n 's/^\s*\"tag_name\"\s*:\s*\"\(.*\)\".*/\1/p' | head -n1 || true)
+    if [ -n "$t" ]; then echo "$t"; else echo "$fallback"; fi
+  }
+
+  if ! grep -q '^API_TAG=' .env; then
+    if [ "$API_TAG_DEFAULT" = "latest" ]; then
+      API_TAG_DEFAULT=$(resolve_tag "ChatFleetOSS/chatfleet-api" "latest")
+    fi
+    echo "API_TAG=${API_TAG_DEFAULT}" >> .env
+  fi
+  if ! grep -q '^WEB_TAG=' .env; then
+    if [ "$WEB_TAG_DEFAULT" = "latest" ]; then
+      WEB_TAG_DEFAULT=$(resolve_tag "ChatFleetOSS/chatfleet-web" "latest")
+    fi
+    echo "WEB_TAG=${WEB_TAG_DEFAULT}" >> .env
+  fi
 }
 
 start_stack() {
   cd "$INSTALL_DIR"
   # Compose picks up API_TAG/WEB_TAG from .env in $INSTALL_DIR
-  . ./
   log "Pulling images (tags from .env)"
   docker compose pull || { log "docker compose pull failed; trying with sudo"; sudo docker compose pull || true; }
   log "Starting services"

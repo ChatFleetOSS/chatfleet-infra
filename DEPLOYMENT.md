@@ -32,7 +32,7 @@ For quick local/server setup without SSH deploy, run:
 
 curl -fsSL https://raw.githubusercontent.com/ChatFleetOSS/chatfleet-infra/main/install.sh | bash
 
-Flags (prefix as ENV):
-- INSTALL_DIR=/opt/chatfleet-infra (default)
-- INSTALL_DOCKER=1 (attempt to install Docker on Debian/Ubuntu)
-- API_TAG=latest WEB_TAG=latest (override image tags)
+Defaults:
+- Installs to `$HOME/chatfleet-infra` (no sudo). Use `USE_SYSTEM=1` to install to `/opt/chatfleet-infra` (prompts for sudo once).
+- Attempts to resolve the latest release tags automatically; you can override via `API_TAG` and `WEB_TAG`.
+- On Linux (Debian/Ubuntu), set `INSTALL_DOCKER=1` to auto-install Docker; on macOS, start Docker Desktop manually.
