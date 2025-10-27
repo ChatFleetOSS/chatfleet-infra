@@ -24,12 +24,18 @@ install_docker_if_needed() {
     return
   fi
   if [ "$INSTALL_DOCKER" != "1" ]; then
-    die "Docker/Compose not found. Re-run with INSTALL_DOCKER=1 to auto-install (Debian/Ubuntu), or install Docker Desktop manually."
+    if [ "$(uname -s)" = "Darwin" ]; then
+      log "Docker Desktop not found. Attempting to open Docker if installed..."
+      if command -v open >/dev/null 2>&1; then open -a Docker || true; fi
+      die "Please install and start Docker Desktop, or re-run with INSTALL_DOCKER=1 on Linux."
+    fi
+    die "Docker/Compose not found. Re-run with INSTALL_DOCKER=1 to auto-install (Debian/Ubuntu), or install Docker manually."
   fi
   if [ -f /etc/debian_version ]; then
     log "Installing Docker/Compose via convenience script..."
-    curl -fsSL https://get.docker.com | sh
-    usermod -aG docker "$USER" 2>/dev/null || true
+    if ! command -v sudo >/dev/null 2>&1; then die "sudo required to install Docker"; fi
+    curl -fsSL https://get.docker.com | sudo sh
+    sudo usermod -aG docker "$USER" 2>/dev/null || true
   else
     die "Auto-install supported only on Debian/Ubuntu. Please install Docker manually."
   fi
@@ -41,7 +47,18 @@ ensure_repo() {
     git -C "$INSTALL_DIR" pull --ff-only || true
   else
     log "Cloning ChatFleetOSS/chatfleet-infra into $INSTALL_DIR"
-    mkdir -p "$INSTALL_DIR"
+    if ! mkdir -p "$INSTALL_DIR" 2>/dev/null; then
+      log "Cannot write to $INSTALL_DIR. Attempting to use elevated permissions..."
+      if command -v sudo >/dev/null 2>&1; then
+        sudo mkdir -p "$INSTALL_DIR"
+        # Determine a reasonable group
+        GROUP_NAME=$(id -gn "$USER" 2>/dev/null || echo "staff")
+        sudo chown -R "$USER":"$GROUP_NAME" "$INSTALL_DIR"
+      else
+        die "sudo not available; cannot create $INSTALL_DIR. Set INSTALL_DIR=
+$HOME/chatfleet-infra and re-run."
+      fi
+    fi
     git clone https://github.com/ChatFleetOSS/chatfleet-infra "$INSTALL_DIR"
   fi
 }
@@ -70,9 +87,9 @@ start_stack() {
   cd "$INSTALL_DIR"
   export API_TAG="$API_TAG_DEFAULT" WEB_TAG="$WEB_TAG_DEFAULT"
   log "Pulling images (api=$API_TAG, web=$WEB_TAG)"
-  docker compose pull || true
+  docker compose pull || { log "docker compose pull failed; trying with sudo"; sudo docker compose pull || true; }
   log "Starting services"
-  docker compose up -d
+  docker compose up -d || { log "docker compose up failed; trying with sudo"; sudo docker compose up -d; }
 }
 
 wait_health() {
@@ -86,7 +103,7 @@ wait_health() {
     fi
   done
   log "Health not ready; showing logs"
-  docker compose -f "$INSTALL_DIR/docker-compose.yml" logs --tail=200 api || true
+  docker compose -f "$INSTALL_DIR/docker-compose.yml" logs --tail=200 api || sudo docker compose -f "$INSTALL_DIR/docker-compose.yml" logs --tail=200 api || true
   return 1
 }
 
@@ -113,4 +130,3 @@ main() {
 }
 
 main "$@"
-
