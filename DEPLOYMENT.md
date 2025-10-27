@@ -26,3 +26,13 @@
 ## HTTPS (optional, end-user domain)
 - Provide a domain and switch to a TLS Caddyfile mapping 80/443
 - Keep HTTP 8080 as the default for zero-config installs
+
+## One-liner installer (HTTP :8080)
+For quick local/server setup without SSH deploy, run:
+
+curl -fsSL https://raw.githubusercontent.com/ChatFleetOSS/chatfleet-infra/main/install.sh | bash
+
+Flags (prefix as ENV):
+- INSTALL_DIR=/opt/chatfleet-infra (default)
+- INSTALL_DOCKER=1 (attempt to install Docker on Debian/Ubuntu)
+- API_TAG=latest WEB_TAG=latest (override image tags)
