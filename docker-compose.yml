@@ -20,7 +20,7 @@ services:
       retries: 5
 
   api:
-    image: ghcr.io/ChatFleetOSS/chatfleet-api:${API_TAG}
+    image: ghcr.io/chatfleetoss/chatfleet-api:${API_TAG}
     restart: unless-stopped
     depends_on:
       mongo:
@@ -49,7 +49,7 @@ services:
       retries: 5
 
   web:
-    image: ghcr.io/ChatFleetOSS/chatfleet-web:${WEB_TAG}
+    image: ghcr.io/chatfleetoss/chatfleet-web:${WEB_TAG}
     restart: unless-stopped
     environment:
       NODE_ENV: production
@@ -69,4 +69,3 @@ volumes:
   mongo_data:
   chatfleet_index:
   chatfleet_uploads:
-

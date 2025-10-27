@@ -81,12 +81,16 @@ ensure_env() {
   else
     log ".env already exists; not modifying"
   fi
+  # Ensure default image tags are present so compose doesn't see blanks (works with sudo too)
+  if ! grep -q '^API_TAG=' .env; then echo "API_TAG=${API_TAG_DEFAULT}" >> .env; fi
+  if ! grep -q '^WEB_TAG=' .env; then echo "WEB_TAG=${WEB_TAG_DEFAULT}" >> .env; fi
 }
 
 start_stack() {
   cd "$INSTALL_DIR"
-  export API_TAG="$API_TAG_DEFAULT" WEB_TAG="$WEB_TAG_DEFAULT"
-  log "Pulling images (api=$API_TAG, web=$WEB_TAG)"
+  # Compose picks up API_TAG/WEB_TAG from .env in $INSTALL_DIR
+  . ./
+  log "Pulling images (tags from .env)"
   docker compose pull || { log "docker compose pull failed; trying with sudo"; sudo docker compose pull || true; }
   log "Starting services"
   docker compose up -d || { log "docker compose up failed; trying with sudo"; sudo docker compose up -d; }
