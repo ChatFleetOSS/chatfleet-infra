@@ -1,0 +1,57 @@
+name: Deploy (SSH)
+
+on:
+  workflow_dispatch:
+    inputs:
+      api_tag:
+        description: chatfleet-api tag (e.g. v1.2.3)
+        required: true
+      web_tag:
+        description: chatfleet-web tag (e.g. v1.2.3)
+        required: true
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout infra repo
+        uses: actions/checkout@v4
+
+      - name: Install Cosign
+        uses: sigstore/cosign-installer@v3
+
+      - name: SSH deploy
+        uses: appleboy/ssh-action@v1.0.3
+        with:
+          host: ${{ secrets.SSH_HOST }}
+          username: ${{ secrets.SSH_USER }}
+          key: ${{ secrets.SSH_KEY }}
+          port: 22
+          script_stop: true
+          command_timeout: 30m
+          envs: GHCR_PAT
+          script: |
+            set -euo pipefail
+            API_TAG="${{ github.event.inputs.api_tag }}"
+            WEB_TAG="${{ github.event.inputs.web_tag }}"
+            IM_API="ghcr.io/ChatFleetOSS/chatfleet-api:${API_TAG}"
+            IM_WEB="ghcr.io/ChatFleetOSS/chatfleet-web:${WEB_TAG}"
+
+            echo "$GHCR_PAT" | docker login ghcr.io -u $USER --password-stdin
+
+            cosign verify \
+              --certificate-oidc-issuer https://token.actions.githubusercontent.com \
+              --certificate-identity-regexp "https://github.com/ChatFleetOSS/.+" \
+              "$IM_API"
+
+            cosign verify \
+              --certificate-oidc-issuer https://token.actions.githubusercontent.com \
+              --certificate-identity-regexp "https://github.com/ChatFleetOSS/.+" \
+              "$IM_WEB"
+
+            cd /opt/chatfleet-infra
+            export API_TAG="$API_TAG" WEB_TAG="$WEB_TAG"
+            docker compose pull
+            docker compose up -d
+            curl -fsS http://localhost:8080/api/health || (docker compose logs api && exit 1)
+

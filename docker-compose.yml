@@ -1,0 +1,72 @@
+version: "3.9"
+
+name: chatfleet
+
+services:
+  mongo:
+    image: mongo:6
+    restart: unless-stopped
+    environment:
+      MONGO_INITDB_ROOT_USERNAME: ${MONGO_ROOT_USER}
+      MONGO_INITDB_ROOT_PASSWORD: ${MONGO_ROOT_PASSWORD}
+      MONGO_INITDB_DATABASE: chatfleet
+    volumes:
+      - mongo_data:/data/db
+      - ./mongo/init/create-app-user.js:/docker-entrypoint-initdb.d/create-app-user.js:ro
+    healthcheck:
+      test: ["CMD", "mongosh", "--username", "${MONGO_ROOT_USER}", "--password", "${MONGO_ROOT_PASSWORD}", "--authenticationDatabase", "admin", "--quiet", "--eval", "db.runCommand({ ping: 1 }).ok"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  api:
+    image: ghcr.io/ChatFleetOSS/chatfleet-api:${API_TAG}
+    restart: unless-stopped
+    depends_on:
+      mongo:
+        condition: service_healthy
+    environment:
+      MONGO_URI: mongodb://chatfleet:${MONGO_APP_PASSWORD}@mongo:27017/chatfleet?authSource=admin
+      AUTO_START_MONGO: "0"
+      JWT_SECRET: ${JWT_SECRET}
+      CHAT_MODEL: ${CHAT_MODEL:-gpt-4o-mini}
+      EMBED_MODEL: ${EMBED_MODEL:-text-embedding-3-small}
+      INDEX_DIR: /var/lib/chatfleet/faiss
+      UPLOAD_DIR: /var/lib/chatfleet/uploads
+      MAX_UPLOAD_MB: ${MAX_UPLOAD_MB:-50}
+      SSE_HEARTBEAT_MS: ${SSE_HEARTBEAT_MS:-15000}
+      TOP_K_DEFAULT: ${TOP_K_DEFAULT:-6}
+      TEMPERATURE_DEFAULT: ${TEMPERATURE_DEFAULT:-0.2}
+      CORS_ORIGINS: ""
+      OPENAI_API_KEY: ${OPENAI_API_KEY:-}
+    volumes:
+      - chatfleet_index:/var/lib/chatfleet/faiss
+      - chatfleet_uploads:/var/lib/chatfleet/uploads
+    healthcheck:
+      test: ["CMD", "curl", "-fsS", "http://localhost:8000/api/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  web:
+    image: ghcr.io/ChatFleetOSS/chatfleet-web:${WEB_TAG}
+    restart: unless-stopped
+    environment:
+      NODE_ENV: production
+
+  caddy:
+    image: caddy:2.8-alpine
+    restart: unless-stopped
+    depends_on:
+      - web
+      - api
+    ports:
+      - "8080:8080"
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+
+volumes:
+  mongo_data:
+  chatfleet_index:
+  chatfleet_uploads:
+
