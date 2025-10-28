@@ -75,7 +75,12 @@ ensure_env() {
     cp .env.example .env
     JWT_SECRET=$(gen_secret)
     MONGO_ROOT_USER="root"
-    MONGO_ROOT_PASSWORD=$(gen_secret)
+    # Generate a hex root password to avoid special-char pitfalls
+    if command -v openssl >/dev/null 2>&1; then
+      MONGO_ROOT_PASSWORD=$(openssl rand -hex 24 | tr -d '\n')
+    else
+      MONGO_ROOT_PASSWORD=$(head -c 24 /dev/urandom | od -An -tx1 | tr -d ' \n')
+    fi
     # Generate an app password that is URL-safe (hex)
     if command -v openssl >/dev/null 2>&1; then
       MONGO_APP_PASSWORD=$(openssl rand -hex 24 | tr -d '\n')
@@ -86,6 +91,7 @@ ensure_env() {
     sed -i.bak "s|^MONGO_ROOT_USER=.*$|MONGO_ROOT_USER=${MONGO_ROOT_USER}|" .env || true
     sed -i.bak "s|^MONGO_ROOT_PASSWORD=.*$|MONGO_ROOT_PASSWORD=${MONGO_ROOT_PASSWORD}|" .env || true
     sed -i.bak "s|^MONGO_APP_PASSWORD=.*$|MONGO_APP_PASSWORD=${MONGO_APP_PASSWORD}|" .env || true
+    sed -i.bak "s|^MONGO_ROOT_PASSWORD=.*$|MONGO_ROOT_PASSWORD=${MONGO_ROOT_PASSWORD}|" .env || true
     # Compose prefers an explicit, URL-encoded URI for safety
     PW_ENC=$(env MONGO_APP_PASSWORD="${MONGO_APP_PASSWORD}" python3 - <<'PY'
 import os, urllib.parse
@@ -95,7 +101,7 @@ PY
     )
     # Fallback if encoding yields empty
     if [ -z "${PW_ENC}" ]; then PW_ENC="${MONGO_APP_PASSWORD}"; fi
-    sed -i.bak "s|^MONGO_URI=.*$|MONGO_URI=mongodb://chatfleet:${PW_ENC}@mongo:27017/chatfleet?authSource=admin|" .env || true
+    sed -i.bak "s|^MONGO_URI=.*$|MONGO_URI=mongodb://chatfleet:${PW_ENC}@mongo:27017/chatfleet?authSource=chatfleet|" .env || true
     rm -f .env.bak || true
     log "Wrote secrets to $INSTALL_DIR/.env"
   else
@@ -149,7 +155,7 @@ print(urllib.parse.quote(val, safe=''))
 PY
     )
     if [ -z "${PW_ENC}" ]; then PW_ENC="${MONGO_APP_PASSWORD}"; fi
-    echo "MONGO_URI=mongodb://chatfleet:${PW_ENC}@mongo:27017/chatfleet?authSource=admin" >> .env
+    echo "MONGO_URI=mongodb://chatfleet:${PW_ENC}@mongo:27017/chatfleet?authSource=chatfleet" >> .env
     log "Added MONGO_URI to .env"
     return
   fi
@@ -163,7 +169,7 @@ print(urllib.parse.quote(val, safe=''))
 PY
       )
       if [ -z "${PW_ENC}" ]; then PW_ENC="${MONGO_APP_PASSWORD}"; fi
-      sed -i.bak "s|^MONGO_URI=.*$|MONGO_URI=mongodb://chatfleet:${PW_ENC}@mongo:27017/chatfleet?authSource=admin|" .env || true
+      sed -i.bak "s|^MONGO_URI=.*$|MONGO_URI=mongodb://chatfleet:${PW_ENC}@mongo:27017/chatfleet?authSource=chatfleet|" .env || true
       rm -f .env.bak || true
       log "Updated MONGO_URI with URL-encoded password"
     fi

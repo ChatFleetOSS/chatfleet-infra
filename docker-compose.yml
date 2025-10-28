@@ -8,6 +8,8 @@ services:
       MONGO_INITDB_ROOT_USERNAME: ${MONGO_ROOT_USER}
       MONGO_INITDB_ROOT_PASSWORD: ${MONGO_ROOT_PASSWORD}
       MONGO_INITDB_DATABASE: chatfleet
+      # Provide app password so init script can create application user
+      MONGO_APP_PASSWORD: ${MONGO_APP_PASSWORD}
     volumes:
       - mongo_data:/data/db
       - ./mongo/init/create-app-user.js:/docker-entrypoint-initdb.d/create-app-user.js:ro
@@ -15,7 +17,7 @@ services:
       test: ["CMD", "mongosh", "--username", "${MONGO_ROOT_USER}", "--password", "${MONGO_ROOT_PASSWORD}", "--authenticationDatabase", "admin", "--quiet", "--eval", "db.runCommand({ ping: 1 }).ok"]
       interval: 10s
       timeout: 5s
-      retries: 5
+      retries: 12
 
   api:
     image: ghcr.io/chatfleetoss/chatfleet-api:${API_TAG:-latest}
