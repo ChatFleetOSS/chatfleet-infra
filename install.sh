@@ -130,8 +130,15 @@ PY
     fi
   }
   # Compute defaults (prefer provided env, else latest release, else 'latest')
+  # Allow opting into the edge channel
+  if [ "${EDGE:-0}" = "1" ] || [ "${CHANNEL:-}" = "edge" ]; then
+    API_TAG_DEFAULT="edge"
+  fi
   if [ "$API_TAG_DEFAULT" = "latest" ]; then
     API_TAG_DEFAULT=$(resolve_tag "ChatFleetOSS/chatfleet-api" "latest")
+  fi
+  if [ "${EDGE:-0}" = "1" ] || [ "${CHANNEL:-}" = "edge" ]; then
+    WEB_TAG_DEFAULT="edge"
   fi
   if [ "$WEB_TAG_DEFAULT" = "latest" ]; then
     WEB_TAG_DEFAULT=$(resolve_tag "ChatFleetOSS/chatfleet-web" "latest")
