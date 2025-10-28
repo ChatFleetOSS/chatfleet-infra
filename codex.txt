@@ -1,0 +1,36 @@
+# Codex Session Handoff — ChatFleet
+
+Date: 2025-10-28
+
+Summary
+- Repos split and aligned: Backend (chatfleet-api), Frontend (chatfleet-web), Infra (chatfleet-infra)
+- CI/CD: multi-arch builds; edge channel publishes on main; stable images on tags
+- Installer hardened: URL-encoded Mongo URI, hex secrets, app user created automatically, optional admin autopromotion (CREATE_ADMIN=1)
+- Docs: quick install/upgrade (README), detailed developer guide (docs/DEVELOPER_SETUP.md), deployment (DEPLOYMENT.md)
+- Frontend auth fix merged; edge/main and v0.1.5 tags published
+
+Latest Releases
+- API image: ghcr.io/chatfleetoss/chatfleet-api:{v0.1.5,latest,edge}
+- Web image: ghcr.io/chatfleetoss/chatfleet-web:{v0.1.5,latest,edge}
+
+How to Verify Locally
+- Fresh install: curl -fsSL "https://raw.githubusercontent.com/ChatFleetOSS/chatfleet-infra/main/install.sh?$(date +%s)" | bash
+- Health: curl -fsS http://localhost:8080/api/health
+- Upgrade: cd $HOME/chatfleet-infra && git pull --ff-only && docker compose pull && docker compose up -d --remove-orphans
+
+CI Requirements
+- Backend (api): Pact consumer + provider verify on CI; Docker build + Trivy + Gitleaks + SBOM + Cosign
+- Frontend (web): npm ci + next build; Docker build + Trivy + Gitleaks + SBOM + Cosign
+- Edge images publish on main; releases on tags
+
+Next Steps (optional)
+- Enforce branch protection requiring build-test-scan + provider-verify (backend) and build-test-scan (frontend)
+- Make Trivy/Gitleaks blocking once baselines are clean
+- Add more unit/integration tests for API beyond Pact if needed
+
+Pointers
+- Installer: install.sh
+- Compose: docker-compose.yml
+- Docs: README.md, DEPLOYMENT.md, docs/DEVELOPER_SETUP.md
+- Backend CI: chatfleet-api/.github/workflows/ci.yml
+- Frontend CI: chatfleet-web/.github/workflows/ci.yml

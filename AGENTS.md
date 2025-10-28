@@ -23,3 +23,5 @@ Scope: this repo provides the installer (`install.sh`), Compose stack, and deplo
   - Schemas: `frontend/chatFleet_frontend/schemas/index.ts`
   - Pact artifact: `frontend/chatFleet_frontend/pacts/ChatFleet-Frontend-ChatFleet-API.json`
 
+## Session Handoff
+- See `codex.txt` in this repo for a concise summary of the latest work, tags, and how to resume.
