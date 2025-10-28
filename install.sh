@@ -98,28 +98,37 @@ PY
   else
     log ".env already exists; not modifying"
   fi
-  # Resolve tags: prefer provided API_TAG/WEB_TAG; otherwise try latest GitHub release; fallback to 'latest'
+  # Ensure tags exist and are non-empty; otherwise default to 'latest'
   resolve_tag() {
     local repo="$1"
     local fallback="$2"
     local t
-    # Query GitHub latest release tag (no jq dependency)
     t=$(curl -fsSL "https://api.github.com/repos/${repo}/releases/latest" 2>/dev/null | sed -n 's/^\s*\"tag_name\"\s*:\s*\"\(.*\)\".*/\1/p' | head -n1 || true)
     if [ -n "$t" ]; then echo "$t"; else echo "$fallback"; fi
   }
-
-  if ! grep -q '^API_TAG=' .env; then
-    if [ "$API_TAG_DEFAULT" = "latest" ]; then
-      API_TAG_DEFAULT=$(resolve_tag "ChatFleetOSS/chatfleet-api" "latest")
+  ensure_tag_kv() {
+    local key="$1"; local default_tag="$2"
+    if ! grep -q "^${key}=" .env; then
+      echo "${key}=${default_tag}" >> .env
+      return
     fi
-    echo "API_TAG=${API_TAG_DEFAULT}" >> .env
-  fi
-  if ! grep -q '^WEB_TAG=' .env; then
-    if [ "$WEB_TAG_DEFAULT" = "latest" ]; then
-      WEB_TAG_DEFAULT=$(resolve_tag "ChatFleetOSS/chatfleet-web" "latest")
+    local cur
+    cur=$(sed -n "s/^${key}=\(.*\)$/\1/p" .env | tail -n1)
+    if [ -z "$cur" ]; then
+      # Replace empty value
+      sed -i.bak "s|^${key}=.*$|${key}=${default_tag}|" .env || true
+      rm -f .env.bak || true
     fi
-    echo "WEB_TAG=${WEB_TAG_DEFAULT}" >> .env
+  }
+  # Compute defaults (prefer provided env, else latest release, else 'latest')
+  if [ "$API_TAG_DEFAULT" = "latest" ]; then
+    API_TAG_DEFAULT=$(resolve_tag "ChatFleetOSS/chatfleet-api" "latest")
   fi
+  if [ "$WEB_TAG_DEFAULT" = "latest" ]; then
+    WEB_TAG_DEFAULT=$(resolve_tag "ChatFleetOSS/chatfleet-web" "latest")
+  fi
+  ensure_tag_kv API_TAG "$API_TAG_DEFAULT"
+  ensure_tag_kv WEB_TAG "$WEB_TAG_DEFAULT"
 }
 
 # Ensure MONGO_URI exists and is URL-encoded correctly even when .env already existed
