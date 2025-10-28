@@ -24,7 +24,8 @@ services:
       mongo:
         condition: service_healthy
     environment:
-      MONGO_URI: mongodb://chatfleet:${MONGO_APP_PASSWORD}@mongo:27017/chatfleet?authSource=admin
+      # Prefer explicit URI from .env to allow URL-encoded passwords
+      MONGO_URI: ${MONGO_URI}
       AUTO_START_MONGO: "0"
       JWT_SECRET: ${JWT_SECRET}
       CHAT_MODEL: ${CHAT_MODEL:-gpt-4o-mini}

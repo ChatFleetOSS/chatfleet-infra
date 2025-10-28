@@ -76,11 +76,23 @@ ensure_env() {
     JWT_SECRET=$(gen_secret)
     MONGO_ROOT_USER="root"
     MONGO_ROOT_PASSWORD=$(gen_secret)
-    MONGO_APP_PASSWORD=$(gen_secret)
+    # Generate an app password that is URL-safe (hex)
+    if command -v openssl >/dev/null 2>&1; then
+      MONGO_APP_PASSWORD=$(openssl rand -hex 24 | tr -d '\n')
+    else
+      MONGO_APP_PASSWORD=$(head -c 24 /dev/urandom | od -An -tx1 | tr -d ' \n')
+    fi
     sed -i.bak "s|^JWT_SECRET=.*$|JWT_SECRET=${JWT_SECRET}|" .env || true
     sed -i.bak "s|^MONGO_ROOT_USER=.*$|MONGO_ROOT_USER=${MONGO_ROOT_USER}|" .env || true
     sed -i.bak "s|^MONGO_ROOT_PASSWORD=.*$|MONGO_ROOT_PASSWORD=${MONGO_ROOT_PASSWORD}|" .env || true
     sed -i.bak "s|^MONGO_APP_PASSWORD=.*$|MONGO_APP_PASSWORD=${MONGO_APP_PASSWORD}|" .env || true
+    # Compose prefers an explicit, URL-encoded URI for safety
+    PW_ENC=$(python3 - <<'PY'
+import os,urllib.parse
+print(urllib.parse.quote(os.environ.get('MONGO_APP_PASSWORD',''), safe=''))
+PY
+    ) || PW_ENC="${MONGO_APP_PASSWORD}"
+    sed -i.bak "s|^MONGO_URI=.*$|MONGO_URI=mongodb://chatfleet:${PW_ENC}@mongo:27017/chatfleet?authSource=admin|" .env || true
     rm -f .env.bak || true
     log "Wrote secrets to $INSTALL_DIR/.env"
   else
@@ -107,6 +119,38 @@ ensure_env() {
       WEB_TAG_DEFAULT=$(resolve_tag "ChatFleetOSS/chatfleet-web" "latest")
     fi
     echo "WEB_TAG=${WEB_TAG_DEFAULT}" >> .env
+  fi
+}
+
+# Ensure MONGO_URI exists and is URL-encoded correctly even when .env already existed
+repair_mongo_uri_if_needed() {
+  cd "$INSTALL_DIR"
+  set +e
+  # shellcheck disable=SC2046
+  . ./.env 2>/dev/null || true
+  set -e
+  if ! grep -q '^MONGO_URI=' .env; then
+    PW_ENC=$(python3 - <<'PY'
+import os,urllib.parse
+print(urllib.parse.quote(os.environ.get('MONGO_APP_PASSWORD',''), safe=''))
+PY
+    ) || PW_ENC="${MONGO_APP_PASSWORD}"
+    echo "MONGO_URI=mongodb://chatfleet:${PW_ENC}@mongo:27017/chatfleet?authSource=admin" >> .env
+    log "Added MONGO_URI to .env"
+    return
+  fi
+  # If password contains characters that likely need encoding and URI doesn't contain %
+  if printf '%s' "${MONGO_APP_PASSWORD:-}" | grep -q '[^A-Za-z0-9_]'; then
+    if ! grep -q '%40\|%2F\|%3A\|%2B\|%3D\|%25' .env; then
+      PW_ENC=$(python3 - <<'PY'
+import os,urllib.parse
+print(urllib.parse.quote(os.environ.get('MONGO_APP_PASSWORD',''), safe=''))
+PY
+      ) || PW_ENC="${MONGO_APP_PASSWORD}"
+      sed -i.bak "s|^MONGO_URI=.*$|MONGO_URI=mongodb://chatfleet:${PW_ENC}@mongo:27017/chatfleet?authSource=admin|" .env || true
+      rm -f .env.bak || true
+      log "Updated MONGO_URI with URL-encoded password"
+    fi
   fi
 }
 
@@ -141,6 +185,7 @@ main() {
   docker compose version >/dev/null 2>&1 || die "Docker Compose v2 not available"
   ensure_repo
   ensure_env
+  repair_mongo_uri_if_needed
   start_stack
   if wait_health; then
     IP=$(hostname -I 2>/dev/null | awk '{print $1}')
