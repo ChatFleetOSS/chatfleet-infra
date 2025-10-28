@@ -30,9 +30,47 @@
 ## One-liner installer (HTTP :8080)
 For quick local/server setup without SSH deploy, run:
 
-curl -fsSL https://raw.githubusercontent.com/ChatFleetOSS/chatfleet-infra/main/install.sh | bash
+curl -fsSL "https://raw.githubusercontent.com/ChatFleetOSS/chatfleet-infra/main/install.sh?$(date +%s)" | bash
 
 Defaults:
 - Installs to `$HOME/chatfleet-infra` (no sudo). Use `USE_SYSTEM=1` to install to `/opt/chatfleet-infra` (prompts for sudo once).
 - Attempts to resolve the latest release tags automatically; you can override via `API_TAG` and `WEB_TAG`.
 - On Linux (Debian/Ubuntu), set `INSTALL_DOCKER=1` to auto-install Docker; on macOS, start Docker Desktop manually.
+
+## Upgrade
+
+To upgrade an existing installation without losing data:
+
+1. Pull infra and images, then restart
+
+```
+cd $HOME/chatfleet-infra
+git pull --ff-only
+docker compose pull
+docker compose up -d --remove-orphans
+curl -fsS http://localhost:8080/api/health
+```
+
+2. Pin a specific release (optional)
+
+Edit `.env` and set the tags you want to use, then pull and restart:
+
+```
+echo 'API_TAG=v0.1.5' >> .env
+echo 'WEB_TAG=v0.1.5' >> .env
+docker compose pull
+docker compose up -d --remove-orphans
+```
+
+3. Use the edge channel (main snapshots)
+
+```
+echo 'API_TAG=edge' >> .env
+echo 'WEB_TAG=edge' >> .env
+docker compose pull
+docker compose up -d --remove-orphans
+```
+
+Notes:
+- Do not delete volumes during upgrades; that would wipe Mongo data.
+- Health should return `status: ok` after the restart.
