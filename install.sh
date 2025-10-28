@@ -87,11 +87,14 @@ ensure_env() {
     sed -i.bak "s|^MONGO_ROOT_PASSWORD=.*$|MONGO_ROOT_PASSWORD=${MONGO_ROOT_PASSWORD}|" .env || true
     sed -i.bak "s|^MONGO_APP_PASSWORD=.*$|MONGO_APP_PASSWORD=${MONGO_APP_PASSWORD}|" .env || true
     # Compose prefers an explicit, URL-encoded URI for safety
-    PW_ENC=$(python3 - <<'PY'
-import os,urllib.parse
-print(urllib.parse.quote(os.environ.get('MONGO_APP_PASSWORD',''), safe=''))
+    PW_ENC=$(env MONGO_APP_PASSWORD="${MONGO_APP_PASSWORD}" python3 - <<'PY'
+import os, urllib.parse
+val = os.environ.get('MONGO_APP_PASSWORD', '')
+print(urllib.parse.quote(val, safe=''))
 PY
-    ) || PW_ENC="${MONGO_APP_PASSWORD}"
+    )
+    # Fallback if encoding yields empty
+    if [ -z "${PW_ENC}" ]; then PW_ENC="${MONGO_APP_PASSWORD}"; fi
     sed -i.bak "s|^MONGO_URI=.*$|MONGO_URI=mongodb://chatfleet:${PW_ENC}@mongo:27017/chatfleet?authSource=admin|" .env || true
     rm -f .env.bak || true
     log "Wrote secrets to $INSTALL_DIR/.env"
@@ -139,11 +142,13 @@ repair_mongo_uri_if_needed() {
   . ./.env 2>/dev/null || true
   set -e
   if ! grep -q '^MONGO_URI=' .env; then
-    PW_ENC=$(python3 - <<'PY'
-import os,urllib.parse
-print(urllib.parse.quote(os.environ.get('MONGO_APP_PASSWORD',''), safe=''))
+    PW_ENC=$(env MONGO_APP_PASSWORD="${MONGO_APP_PASSWORD}" python3 - <<'PY'
+import os, urllib.parse
+val = os.environ.get('MONGO_APP_PASSWORD', '')
+print(urllib.parse.quote(val, safe=''))
 PY
-    ) || PW_ENC="${MONGO_APP_PASSWORD}"
+    )
+    if [ -z "${PW_ENC}" ]; then PW_ENC="${MONGO_APP_PASSWORD}"; fi
     echo "MONGO_URI=mongodb://chatfleet:${PW_ENC}@mongo:27017/chatfleet?authSource=admin" >> .env
     log "Added MONGO_URI to .env"
     return
@@ -151,11 +156,13 @@ PY
   # If password contains characters that likely need encoding and URI doesn't contain %
   if printf '%s' "${MONGO_APP_PASSWORD:-}" | grep -q '[^A-Za-z0-9_]'; then
     if ! grep -q '%40\|%2F\|%3A\|%2B\|%3D\|%25' .env; then
-      PW_ENC=$(python3 - <<'PY'
-import os,urllib.parse
-print(urllib.parse.quote(os.environ.get('MONGO_APP_PASSWORD',''), safe=''))
+      PW_ENC=$(env MONGO_APP_PASSWORD="${MONGO_APP_PASSWORD}" python3 - <<'PY'
+import os, urllib.parse
+val = os.environ.get('MONGO_APP_PASSWORD', '')
+print(urllib.parse.quote(val, safe=''))
 PY
-      ) || PW_ENC="${MONGO_APP_PASSWORD}"
+      )
+      if [ -z "${PW_ENC}" ]; then PW_ENC="${MONGO_APP_PASSWORD}"; fi
       sed -i.bak "s|^MONGO_URI=.*$|MONGO_URI=mongodb://chatfleet:${PW_ENC}@mongo:27017/chatfleet?authSource=admin|" .env || true
       rm -f .env.bak || true
       log "Updated MONGO_URI with URL-encoded password"
