@@ -200,6 +200,53 @@ wait_health() {
   return 1
 }
 
+prompt_admin_email() {
+  if [ -n "${ADMIN_EMAIL:-}" ]; then
+    printf "%s" "$ADMIN_EMAIL"
+    return 0
+  fi
+  # Require TTY to prompt
+  if [ -t 0 ]; then
+    local email1 email2
+    while true; do
+      read -r -p "Enter admin email: " email1
+      read -r -p "Confirm admin email: " email2
+      if [ -z "$email1" ] || [ "$email1" != "$email2" ]; then
+        echo "Emails do not match or empty. Try again." >&2
+        continue
+      fi
+      printf "%s" "$email1"
+      return 0
+    done
+  else
+    echo ""  # no TTY; return empty
+  fi
+}
+
+promote_admin_if_present() {
+  # Promote a registered user to admin by email (if found)
+  local email="$1"
+  [ -z "$email" ] && return 0
+  # Load env
+  set +e
+  . "$INSTALL_DIR/.env" 2>/dev/null || true
+  set -e
+  # Try for up to 90s to find and promote
+  for i in $(seq 1 18); do
+    # shellcheck disable=SC2016
+    if docker compose -f "$INSTALL_DIR/docker-compose.yml" exec -T mongo mongosh --quiet \
+      -u "$MONGO_ROOT_USER" -p "$MONGO_ROOT_PASSWORD" --authenticationDatabase admin \
+      --eval 'db=db.getSiblingDB("chatfleet"); var u=db.users.findOne({email:"'$email'"}); if(u){ db.users.updateOne({email:"'$email'"}, {$set:{role:"admin"}}); print("PROMOTED"); } else { print("NOTFOUND"); }' \
+      | grep -q PROMOTED; then
+      log "Promoted $email to admin."
+      return 0
+    fi
+    sleep 5
+  done
+  log "Admin email '$email' not found yet. After registering in the UI, promote manually with:"
+  echo "  docker compose -f '$INSTALL_DIR/docker-compose.yml' exec mongo mongosh --quiet -u \"$MONGO_ROOT_USER\" -p \"$MONGO_ROOT_PASSWORD\" --authenticationDatabase admin --eval 'db=db.getSiblingDB(\"chatfleet\"); db.users.updateOne({email:\"$email\"}, {\$set:{role:\"admin\"}})'"
+}
+
 main() {
   need_cmd git; need_cmd curl
   install_docker_if_needed
@@ -218,6 +265,16 @@ main() {
     echo "Repo dir: $INSTALL_DIR"
     echo "Secrets: $INSTALL_DIR/.env"
     echo "Next steps: Register at /login, then promote your user to admin in Mongo (see DEPLOYMENT.md)."
+    if [ "${CREATE_ADMIN:-0}" = "1" ]; then
+      local ADMIN_ADDR
+      ADMIN_ADDR=$(prompt_admin_email)
+      if [ -n "$ADMIN_ADDR" ]; then
+        log "Will attempt to auto-promote '$ADMIN_ADDR' to admin once registered."
+        promote_admin_if_present "$ADMIN_ADDR"
+      else
+        log "CREATE_ADMIN=1 set but no email provided (no TTY?). Skipping auto-promotion."
+      fi
+    fi
   else
     die "Startup failed; inspect logs above."
   fi
