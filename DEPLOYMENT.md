@@ -37,6 +37,10 @@ Defaults:
 - Attempts to resolve the latest release tags automatically; you can override via `API_TAG` and `WEB_TAG`.
 - On Linux (Debian/Ubuntu), set `INSTALL_DOCKER=1` to auto-install Docker; on macOS, start Docker Desktop manually.
 
+Admin setup:
+- To have the first admin available immediately on login, pass `CREATE_ADMIN=1 ADMIN_EMAIL=you@example.com` to the installer. The installer creates a 48h promotion intent in Mongo; the first successful login with that email is upgraded to admin before the token is issued (no delay).
+- If you prefer manual promotion, you can still run the `mongosh` one-liner from `README.md` to set `{role:"admin"}` for any existing user.
+
 ## Upgrade
 
 To upgrade an existing installation without losing data:

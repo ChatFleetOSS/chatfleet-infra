@@ -9,7 +9,8 @@ curl -fsSL "https://raw.githubusercontent.com/ChatFleetOSS/chatfleet-infra/main/
 ```
 
 Options:
-- `CREATE_ADMIN=1` — prompt/confirm admin email and auto‑promote after you register in the UI.
+- `CREATE_ADMIN=1` — prompt/confirm admin email and create a pending admin promotion.
+  The first successful login with that email is immediately upgraded to admin (no delay).
 - `ADMIN_EMAIL=you@example.com` — non‑interactive email for admin promotion.
 - `EDGE=1` (or `CHANNEL=edge`) — use `:edge` images built from `main`.
 
@@ -38,4 +39,3 @@ echo 'API_TAG=edge' >> .env
 echo 'WEB_TAG=edge' >> .env
 docker compose pull && docker compose up -d --remove-orphans
 ```
-

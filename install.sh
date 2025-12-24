@@ -230,6 +230,28 @@ prompt_admin_email() {
   fi
 }
 
+create_admin_promotion_intent() {
+  # Create a pending admin promotion intent so that the first login upgrades immediately
+  local email="$1"
+  [ -z "$email" ] && return 0
+  set +e
+  . "$INSTALL_DIR/.env" 2>/dev/null || true
+  set -e
+  # 48h validity window
+  local hours=48
+  # shellcheck disable=SC2016
+  if docker compose -f "$INSTALL_DIR/docker-compose.yml" exec -T mongo mongosh --quiet \
+    -u "$MONGO_ROOT_USER" -p "$MONGO_ROOT_PASSWORD" --authenticationDatabase admin \
+    --eval 'db=db.getSiblingDB("chatfleet"); var now=new Date(); var exp=new Date(now.getTime()+('$hours')*3600*1000); db.admin_promotions.updateOne({email:"'$email'"},{\$setOnInsert:{email:"'$email'",created_at:now,expires_at:exp,redeemed:false}},{upsert:true}); print("INTENT_OK");' \
+    | grep -q INTENT_OK; then
+    log "Created admin promotion intent for $email (valid ${hours}h)."
+    return 0
+  else
+    log "Could not create admin promotion intent (older API image?). Falling back to polling promotion."
+    return 1
+  fi
+}
+
 promote_admin_if_present() {
   # Promote a registered user to admin by email (if found)
   local email="$1"
@@ -276,8 +298,13 @@ main() {
       local ADMIN_ADDR
       ADMIN_ADDR=$(prompt_admin_email)
       if [ -n "$ADMIN_ADDR" ]; then
-        log "Will attempt to auto-promote '$ADMIN_ADDR' to admin once registered."
-        promote_admin_if_present "$ADMIN_ADDR"
+        # Best effort: prefer intent creation for immediate upgrade at login; otherwise fall back to poll
+        if ! create_admin_promotion_intent "$ADMIN_ADDR"; then
+          log "Will attempt to auto-promote '$ADMIN_ADDR' to admin once registered."
+          promote_admin_if_present "$ADMIN_ADDR"
+        else
+          log "On first login, '$ADMIN_ADDR' will be upgraded to admin immediately."
+        fi
       else
         log "CREATE_ADMIN=1 set but no email provided (no TTY?). Skipping auto-promotion."
       fi
