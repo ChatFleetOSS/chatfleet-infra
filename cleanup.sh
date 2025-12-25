@@ -40,27 +40,24 @@ down_compose() {
 rm_containers() {
   note "Removing standalone dev containers (if any)"
   docker rm -f cf-mongo 2>/dev/null || true
-  # Remove any stray chatfleet- prefixed containers from previous compose runs
-  mapfile -t CF_CONTAINERS < <(docker ps -a --format '{{.Names}}' | grep -E '^chatfleet-' || true)
-  if (( ${#CF_CONTAINERS[@]} )); then
-    printf '%s\n' "${CF_CONTAINERS[@]}" | xargs -r docker rm -f || true
-  fi
+  # Remove any stray chatfleet- prefixed containers from previous compose runs (portable, no mapfile)
+  docker ps -a --format '{{.Names}}' | grep -E '^chatfleet-' | while read -r cname; do
+    [ -n "$cname" ] && docker rm -f "$cname" || true
+  done || true
 }
 
 rm_volumes() {
   note "Removing ChatFleet volumes"
-  mapfile -t CF_VOLUMES < <(docker volume ls --format '{{.Name}}' | grep -E '^chatfleet_' || true)
-  if (( ${#CF_VOLUMES[@]} )); then
-    printf '%s\n' "${CF_VOLUMES[@]}" | xargs -r docker volume rm || true
-  fi
+  docker volume ls --format '{{.Name}}' | grep -E '^chatfleet_' | while read -r v; do
+    [ -n "$v" ] && docker volume rm "$v" || true
+  done || true
 }
 
 rm_images() {
   note "Removing ChatFleet images from GHCR (local cache)"
-  mapfile -t CF_IMAGES < <(docker images --format '{{.Repository}} {{.ID}}' | awk '/ghcr\.io\/chatfleetoss\// {print $2}' | sort -u || true)
-  if (( ${#CF_IMAGES[@]} )); then
-    printf '%s\n' "${CF_IMAGES[@]}" | xargs -r docker rmi -f || true
-  fi
+  docker images --format '{{.Repository}} {{.ID}}' | awk '$1 ~ /ghcr\.io\/chatfleetoss\// {print $2}' | while read -r iid; do
+    [ -n "$iid" ] && docker rmi -f "$iid" || true
+  done || true
 }
 
 rm_networks() {
@@ -80,4 +77,3 @@ main() {
 }
 
 main "$@"
-
