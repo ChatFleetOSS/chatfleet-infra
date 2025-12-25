@@ -242,7 +242,7 @@ create_admin_promotion_intent() {
   # shellcheck disable=SC2016
   if docker compose -f "$INSTALL_DIR/docker-compose.yml" exec -T mongo mongosh --quiet \
     -u "$MONGO_ROOT_USER" -p "$MONGO_ROOT_PASSWORD" --authenticationDatabase admin \
-    --eval 'db=db.getSiblingDB("chatfleet"); var now=new Date(); var exp=new Date(now.getTime()+('$hours')*3600*1000); db.admin_promotions.updateOne({email:"'$email'"},{\$setOnInsert:{email:"'$email'",created_at:now,expires_at:exp,redeemed:false}},{upsert:true}); print("INTENT_OK");' \
+    --eval 'db=db.getSiblingDB("chatfleet"); var now=new Date(); var exp=new Date(now.getTime()+('$hours')*3600*1000); db.admin_promotions.updateOne({email:"'$email'"},{ $setOnInsert:{email:"'$email'", created_at:now, expires_at:exp, redeemed:false}},{upsert:true}); print("INTENT_OK");' \
     | grep -q INTENT_OK; then
     log "Created admin promotion intent for $email (valid ${hours}h)."
     return 0
