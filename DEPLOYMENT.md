@@ -15,12 +15,14 @@
 - SSH_HOST: server IP/hostname
 - SSH_USER: deploy
 - SSH_KEY: private key (PEM) for deploy user
+- GHCR_USERNAME: GitHub username owning the `GHCR_PAT`
 - GHCR_PAT: read:packages token for GHCR pulls
 
 ## Deploy
-- Release images by tagging backend/frontend repos (e.g., v1.0.0)
+- Release images by tagging backend/frontend repos (e.g., `v1.0.0`)
+- Update `channels/stable.env` in this repo to the exact pair you want to deploy by default
 - In this repo → Actions → “Deploy (SSH)”
-- Enter api_tag/web_tag (e.g., v1.0.0), run
+- Run it with the default `channel=stable`, or override `api_tag` / `web_tag` for a one-off deploy
 - App at: http://<server>:8080
 
 ## HTTPS (optional, end-user domain)
@@ -34,8 +36,9 @@ curl -fsSL "https://raw.githubusercontent.com/ChatFleetOSS/chatfleet-infra/main/
 
 Defaults:
 - Installs to `$HOME/chatfleet-infra` (no sudo). Use `USE_SYSTEM=1` to install to `/opt/chatfleet-infra` (prompts for sudo once).
-- Attempts to resolve the latest release tags automatically; you can override via `API_TAG` and `WEB_TAG`.
+- Uses the committed `stable` channel from `channels/stable.env`; you can override via `CHANNEL`, `API_TAG`, and `WEB_TAG`.
 - On Linux (Debian/Ubuntu), set `INSTALL_DOCKER=1` to auto-install Docker; on macOS, start Docker Desktop manually.
+- Verifies that `/api/health` and `/build-info` return the expected build versions after startup.
 
 Admin setup:
 - To have the first admin available immediately on login, pass `CREATE_ADMIN=1 ADMIN_EMAIL=you@example.com` to the installer. The installer creates a 48h promotion intent in Mongo; the first successful login with that email is upgraded to admin before the token is issued (no delay).
@@ -48,33 +51,38 @@ To upgrade an existing installation without losing data:
 1. Pull infra and images, then restart
 
 ```
-cd $HOME/chatfleet-infra
-git pull --ff-only
-docker compose pull
-docker compose up -d --remove-orphans
-curl -fsS http://localhost:8080/api/health
+$HOME/chatfleet-infra/upgrade.sh
 ```
 
-2. Pin a specific release (optional)
-
-Edit `.env` and set the tags you want to use, then pull and restart:
+2. Move to the `edge` channel (optional)
 
 ```
-echo 'API_TAG=v0.1.5' >> .env
-echo 'WEB_TAG=v0.1.5' >> .env
-docker compose pull
-docker compose up -d --remove-orphans
+CHANNEL=edge $HOME/chatfleet-infra/upgrade.sh
 ```
 
-3. Use the edge channel (main snapshots)
+3. Pin a specific pair (optional)
 
 ```
-echo 'API_TAG=edge' >> .env
-echo 'WEB_TAG=edge' >> .env
-docker compose pull
-docker compose up -d --remove-orphans
+API_TAG=v0.1.14 WEB_TAG=v0.1.16 $HOME/chatfleet-infra/upgrade.sh
 ```
 
 Notes:
 - Do not delete volumes during upgrades; that would wipe Mongo data.
-- Health should return `status: ok` after the restart.
+- `upgrade.sh` rewrites `.env` so the deployed `CHATFLEET_CHANNEL`, `API_TAG`, and `WEB_TAG` stay explicit.
+- Health should return `status: ok` after the restart, and `/build-info` should match the expected web tag.
+
+## Promotion Flow
+
+Use this flow to prevent infra drift as backend/frontend code evolves:
+
+1. Backend/frontend `main` stays deployable through the `edge` channel.
+2. New-machine smoke validation is done with `CHANNEL=edge`.
+3. Semver tags are cut in `chatfleet-api` and `chatfleet-web` once the pair is validated.
+4. `channels/stable.env` is updated in `chatfleet-infra` to the exact release tags.
+5. Infra CI must pass before merging that promotion PR.
+
+Initial rollout order for these guardrails:
+1. Merge `chatfleet-infra` first.
+2. Merge backend/frontend so `edge` images are published from `main`.
+3. Trigger infra edge validation manually once those images exist.
+4. Promote the final release tags through the `Promote Channel` workflow.

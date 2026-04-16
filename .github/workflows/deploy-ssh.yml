@@ -3,12 +3,16 @@ name: Deploy (SSH)
 on:
   workflow_dispatch:
     inputs:
+      channel:
+        description: deployment channel (stable or edge)
+        default: stable
+        required: true
       api_tag:
         description: chatfleet-api tag (e.g. v1.2.3)
-        required: true
+        required: false
       web_tag:
         description: chatfleet-web tag (e.g. v1.2.3)
-        required: true
+        required: false
 
 jobs:
   deploy:
@@ -29,15 +33,27 @@ jobs:
           port: 22
           script_stop: true
           command_timeout: 30m
-          envs: GHCR_PAT
+          envs: GHCR_PAT,GHCR_USERNAME
           script: |
             set -euo pipefail
+            CHANNEL="${{ github.event.inputs.channel }}"
             API_TAG="${{ github.event.inputs.api_tag }}"
             WEB_TAG="${{ github.event.inputs.web_tag }}"
-            IM_API="ghcr.io/ChatFleetOSS/chatfleet-api:${API_TAG}"
-            IM_WEB="ghcr.io/ChatFleetOSS/chatfleet-web:${WEB_TAG}"
 
-            echo "$GHCR_PAT" | docker login ghcr.io -u $USER --password-stdin
+            cd /opt/chatfleet-infra
+            git pull --ff-only || true
+
+            eval "$(
+              CHANNEL="$CHANNEL" \
+              API_TAG="$API_TAG" \
+              WEB_TAG="$WEB_TAG" \
+              bash ./scripts/resolve-channel.sh
+            )"
+
+            IM_API="ghcr.io/chatfleetoss/chatfleet-api:${API_TAG}"
+            IM_WEB="ghcr.io/chatfleetoss/chatfleet-web:${WEB_TAG}"
+
+            echo "$GHCR_PAT" | docker login ghcr.io -u "${GHCR_USERNAME}" --password-stdin
 
             cosign verify \
               --certificate-oidc-issuer https://token.actions.githubusercontent.com \
@@ -49,9 +65,8 @@ jobs:
               --certificate-identity-regexp "https://github.com/ChatFleetOSS/.+" \
               "$IM_WEB"
 
-            cd /opt/chatfleet-infra
-            export API_TAG="$API_TAG" WEB_TAG="$WEB_TAG"
-            docker compose pull
-            docker compose up -d
-            curl -fsS http://localhost:8080/api/health || (docker compose logs api && exit 1)
-
+            CHANNEL="$CHATFLEET_CHANNEL" API_TAG="$API_TAG" WEB_TAG="$WEB_TAG" ./upgrade.sh /opt/chatfleet-infra
+            python3 ./scripts/verify_stack.py \
+              --base-url http://localhost:8080 \
+              --expected-api "$API_TAG" \
+              --expected-web "$WEB_TAG"
