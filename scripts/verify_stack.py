@@ -21,30 +21,34 @@ def fetch_json(url: str, timeout: float) -> dict:
 def main() -> int:
     parser = argparse.ArgumentParser(description="Verify ChatFleet stack versions")
     parser.add_argument("--base-url", default="http://localhost:8080")
-    parser.add_argument("--expected-api", required=True)
-    parser.add_argument("--expected-web", required=True)
+    parser.add_argument("--expected-api")
+    parser.add_argument("--expected-web")
     parser.add_argument("--timeout", type=float, default=10.0)
     args = parser.parse_args()
 
     base_url = args.base_url.rstrip("/")
     health = fetch_json(f"{base_url}/api/health", args.timeout)
-    build_info = fetch_json(f"{base_url}/build-info", args.timeout)
 
     api_version = ((health.get("build") or {}).get("version")) if isinstance(health, dict) else None
-    web_version = ((build_info.get("build") or {}).get("version")) if isinstance(build_info, dict) else None
     status = health.get("status") if isinstance(health, dict) else None
+    web_version = None
+
+    if args.expected_web:
+        build_info = fetch_json(f"{base_url}/build-info", args.timeout)
+        web_version = ((build_info.get("build") or {}).get("version")) if isinstance(build_info, dict) else None
 
     print(f"health.status={status}")
     print(f"health.build.version={api_version}")
-    print(f"build-info.build.version={web_version}")
+    if args.expected_web:
+        print(f"build-info.build.version={web_version}")
 
     if status != "ok":
         raise RuntimeError(f"unexpected health status: {status!r}")
-    if api_version != args.expected_api:
+    if args.expected_api and api_version != args.expected_api:
         raise RuntimeError(
             f"api version mismatch: expected {args.expected_api}, got {api_version}"
         )
-    if web_version != args.expected_web:
+    if args.expected_web and web_version != args.expected_web:
         raise RuntimeError(
             f"web version mismatch: expected {args.expected_web}, got {web_version}"
         )

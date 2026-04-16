@@ -12,6 +12,7 @@ INFRA_REPO_URL="${INFRA_REPO_URL:-https://github.com/ChatFleetOSS/chatfleet-infr
 INFRA_SOURCE_DIR="${INFRA_SOURCE_DIR:-}"
 INSTALL_DOCKER="${INSTALL_DOCKER:-0}"
 SKIP_PULL="${SKIP_PULL:-0}"
+SKIP_VERIFY="${SKIP_VERIFY:-0}"
 
 log() { echo -e "[chatfleet-install] $*"; }
 die() { echo -e "[chatfleet-install][error] $*" >&2; exit 1; }
@@ -303,10 +304,14 @@ main() {
   repair_mongo_uri_if_needed
   start_stack
   if wait_health; then
-    python3 "$INSTALL_DIR/scripts/verify_stack.py" \
-      --base-url "http://localhost:8080" \
-      --expected-api "$API_TAG" \
-      --expected-web "$WEB_TAG"
+    if [ "$SKIP_VERIFY" = "1" ]; then
+      log "Skipping post-install version verification (SKIP_VERIFY=1)"
+    else
+      python3 "$INSTALL_DIR/scripts/verify_stack.py" \
+        --base-url "http://localhost:8080" \
+        --expected-api "$API_TAG" \
+        --expected-web "$WEB_TAG"
+    fi
     IP=$(hostname -I 2>/dev/null | awk '{print $1}')
     HOST=${IP:-localhost}
     echo

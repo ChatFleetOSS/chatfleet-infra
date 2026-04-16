@@ -10,7 +10,10 @@ This is the source of truth for promoting backend/frontend versions into `chatfl
 ## Normal Flow
 1. Merge `chatfleet-infra` changes first when the process or channel scripts evolve.
 2. Merge backend and frontend changes to `main`.
-   Their CI publishes:
+   Their CI publishes only after the repo-level validation jobs are green:
+   - backend: consumer pact, provider verify, infra smoke
+   - frontend: build checks, infra smoke
+   Then it publishes:
    - `edge`
    - `sha-<commit>`
 3. Validate the latest `main` pair with the infra `edge` channel.
@@ -28,6 +31,7 @@ This is the source of truth for promoting backend/frontend versions into `chatfl
 - `install.sh` and `upgrade.sh` resolve a committed channel file, not `latest`
 - `promote_channel.py` validates tag format and GHCR presence before changing a channel
 - infra CI exercises the promotion logic over three successive release pairs
+- channel promotion fails fast if the target tags do not exist yet in GHCR
 - backend CI smoke-tests the local backend against the stable frontend in infra
 - frontend CI smoke-tests the local frontend against the stable backend in infra
 
@@ -44,6 +48,7 @@ To test a local temporary pair without touching `stable`, use explicit overrides
 ```bash
 INSTALL_DIR=/tmp/chatfleet-sim \
 SKIP_PULL=1 \
+SKIP_VERIFY=1 \
 API_TAG=<local-api-tag> \
 WEB_TAG=<local-web-tag> \
 CHANNEL=stable \
