@@ -1,6 +1,17 @@
 # ChatFleet Infra — Quick Install and Upgrade
 
-Quick commands for end users and operators. See `DEPLOYMENT.md` for SSH deploy and `docs/DEVELOPER_SETUP.md` for detailed troubleshooting.
+Quick commands for end users and operators. See `DEPLOYMENT.md` for SSH deploy.
+For a developer or power user installing ChatFleet on a brand new machine, read `docs/DEVELOPER_SETUP.md`.
+That guide includes:
+- exact prerequisites (`git`, `curl`, `python3`, Docker, Compose)
+- the implicit prep steps on macOS and Linux before running ChatFleet
+- the exact `curl | bash` commands for `stable`, `edge`, and first-admin creation
+- what the installer does internally step by step
+- what to verify immediately after install
+- where files, secrets, volumes, and useful endpoints live
+- how to upgrade without data loss
+- how to reinstall, reset, and troubleshoot the most common failures
+
 Release promotion and anti-drift process: `docs/RELEASE_PROCESS.md`.
 
 ## Quick Install (HTTP :8080)
@@ -13,6 +24,7 @@ Default behavior:
 - installs from the committed `stable` channel in `channels/stable.env`
 - writes `CHATFLEET_CHANNEL`, `API_TAG`, and `WEB_TAG` into `.env`
 - verifies the live API and web build versions after startup
+- expects Docker to be running, `:8080` to be free, and enough local disk for the first image pull
 
 Options:
 - `CREATE_ADMIN=1` — prompt/confirm admin email and create a pending admin promotion.
