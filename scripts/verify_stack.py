@@ -22,7 +22,9 @@ def main() -> int:
     parser = argparse.ArgumentParser(description="Verify ChatFleet stack versions")
     parser.add_argument("--base-url", default="http://localhost:8080")
     parser.add_argument("--expected-api")
+    parser.add_argument("--expected-api-prefix")
     parser.add_argument("--expected-web")
+    parser.add_argument("--expected-web-prefix")
     parser.add_argument("--timeout", type=float, default=10.0)
     args = parser.parse_args()
 
@@ -33,13 +35,13 @@ def main() -> int:
     status = health.get("status") if isinstance(health, dict) else None
     web_version = None
 
-    if args.expected_web:
+    if args.expected_web or args.expected_web_prefix:
         build_info = fetch_json(f"{base_url}/build-info", args.timeout)
         web_version = ((build_info.get("build") or {}).get("version")) if isinstance(build_info, dict) else None
 
     print(f"health.status={status}")
     print(f"health.build.version={api_version}")
-    if args.expected_web:
+    if args.expected_web or args.expected_web_prefix:
         print(f"build-info.build.version={web_version}")
 
     if status != "ok":
@@ -48,9 +50,17 @@ def main() -> int:
         raise RuntimeError(
             f"api version mismatch: expected {args.expected_api}, got {api_version}"
         )
+    if args.expected_api_prefix and not (api_version or "").startswith(args.expected_api_prefix):
+        raise RuntimeError(
+            f"api version mismatch: expected prefix {args.expected_api_prefix}, got {api_version}"
+        )
     if args.expected_web and web_version != args.expected_web:
         raise RuntimeError(
             f"web version mismatch: expected {args.expected_web}, got {web_version}"
+        )
+    if args.expected_web_prefix and not (web_version or "").startswith(args.expected_web_prefix):
+        raise RuntimeError(
+            f"web version mismatch: expected prefix {args.expected_web_prefix}, got {web_version}"
         )
     return 0
 

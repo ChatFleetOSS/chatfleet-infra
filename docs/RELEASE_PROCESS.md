@@ -18,6 +18,8 @@ This is the source of truth for promoting backend/frontend versions into `chatfl
    - `sha-<commit>`
 3. Validate the latest `main` pair with the infra `edge` channel.
    Use the infra `Infra CI` workflow manually or wait for the nightly run.
+   The mutable `edge` tag still reports an internal build version like `sha-<commit>`;
+   the smoke test verifies that prefix instead of comparing to the literal string `edge`.
 4. Cut release tags in `chatfleet-api` and `chatfleet-web`.
 5. Run the infra workflow `Promote Channel`.
    Inputs:
