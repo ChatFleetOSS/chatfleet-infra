@@ -41,25 +41,31 @@ Par defaut :
 
 Avant de lancer l'installation, il faut avoir :
 
-- `git`
 - `curl`
-- `python3`
 - Docker avec Compose v2
 - un acces reseau sortant vers `github.com` et `ghcr.io`
 - plusieurs Go d'espace disque libre pour les images Docker et les volumes
 - le port `8080` libre sur la machine si vous gardez la configuration par defaut
 
+Notes importantes :
+- sur Debian/Ubuntu, l'installateur peut bootstrapper automatiquement `git` et `python3` s'ils manquent
+- sur Debian/Ubuntu, `INSTALL_DOCKER=1` permet aussi d'installer Docker/Compose
+- sur macOS, `git` et `python3` doivent rester disponibles dans le `PATH`, et Docker Desktop doit etre installe
+
 Verification recommandee :
 
 ```bash
-git --version
+git --version || true
 curl --version
-python3 --version
+python3 --version || true
 docker --version
 docker compose version
 ```
 
-Si une de ces commandes echoue, il faut corriger avant de continuer.
+Interpretation :
+- si `git` ou `python3` manquent sur Debian/Ubuntu, le script peut les installer lui-meme
+- si `git` ou `python3` manquent sur macOS, il faut corriger avant de continuer
+- si Docker ou Compose manquent sur Debian/Ubuntu, utiliser `INSTALL_DOCKER=1`
 
 Verification utile avant install :
 
@@ -112,7 +118,7 @@ L'installateur peut essayer de l'installer automatiquement sur Debian/Ubuntu ave
 Important :
 - cette installation peut demander `sudo`
 - il est possible que le groupe Docker ne soit pas applique immediatement a la session courante
-- dans ce cas, le script peut retenter certaines commandes avec `sudo`
+- dans ce cas, le script retente les commandes Compose avec `sudo` dans la session courante
 
 ## 4. Choisir le bon canal avant install
 
@@ -148,6 +154,17 @@ Note :
 - le premier `docker compose pull` peut etre long sur une machine neuve
 - ne pas interrompre la commande tant que les images sont en cours de telechargement
 - la duree depend fortement du reseau et du cache Docker deja present
+
+Si vous etes sur Debian/Ubuntu sans Docker installe :
+
+```bash
+curl -fsSL "https://raw.githubusercontent.com/ChatFleetOSS/chatfleet-infra/main/install.sh?$(date +%s)" | INSTALL_DOCKER=1 bash
+```
+
+Ce mode :
+- peut installer `git`, `python3`, Docker et Compose
+- peut demander `sudo`
+- peut continuer avec `sudo docker compose` meme si le groupe Docker n'est pas encore actif dans le shell courant
 
 ### Installation en `edge`
 
@@ -186,15 +203,18 @@ curl -fsSL "https://raw.githubusercontent.com/ChatFleetOSS/chatfleet-infra/main/
 Pendant l'execution, le script :
 
 1. verifie les prerequis systeme
-2. installe Docker automatiquement si vous etes sur Debian/Ubuntu et que `INSTALL_DOCKER=1` est fourni
-3. clone ou met a jour `chatfleet-infra`
-4. cree `.env` si besoin
-5. choisit `CHATFLEET_CHANNEL`, `API_TAG` et `WEB_TAG`
-6. lance `docker compose pull`
-7. lance `docker compose up -d --remove-orphans`
-8. attend la reponse de `http://localhost:8080/api/health`
-9. verifie que l'API et le web exposes correspondent bien aux tags attendus
-10. affiche les URLs finales
+2. installe `git` et `python3` automatiquement si vous etes sur Debian/Ubuntu et qu'ils manquent
+3. installe Docker automatiquement si vous etes sur Debian/Ubuntu et que `INSTALL_DOCKER=1` est fourni
+4. attend que Docker soit vraiment pret
+5. choisit automatiquement `docker compose` ou `sudo docker compose` selon l'acces disponible
+6. clone ou met a jour `chatfleet-infra`
+7. cree `.env` si besoin
+8. choisit `CHATFLEET_CHANNEL`, `API_TAG` et `WEB_TAG`
+9. lance `docker compose pull`
+10. lance `docker compose up -d --remove-orphans`
+11. attend la reponse de `http://localhost:8080/api/health`
+12. verifie que l'API et le web exposes correspondent bien aux tags attendus
+13. affiche les URLs finales
 
 Si `CREATE_ADMIN=1` est actif :
 

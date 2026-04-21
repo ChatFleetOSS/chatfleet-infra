@@ -3,7 +3,7 @@
 Quick commands for end users and operators. See `DEPLOYMENT.md` for SSH deploy.
 For a developer or power user installing ChatFleet on a brand new machine, read `docs/DEVELOPER_SETUP.md`.
 That guide includes:
-- exact prerequisites (`git`, `curl`, `python3`, Docker, Compose)
+- exact prerequisites (`curl`, plus `git`/`python3`/Docker/Compose handling on macOS and Debian/Ubuntu)
 - the implicit prep steps on macOS and Linux before running ChatFleet
 - the exact `curl | bash` commands for `stable`, `edge`, and first-admin creation
 - what the installer does internally step by step
@@ -24,9 +24,12 @@ Default behavior:
 - installs from the committed `stable` channel in `channels/stable.env`
 - writes `CHATFLEET_CHANNEL`, `API_TAG`, and `WEB_TAG` into `.env`
 - verifies the live API and web build versions after startup
-- expects Docker to be running, `:8080` to be free, and enough local disk for the first image pull
+- expects `:8080` to be free and enough local disk for the first image pull
+- on Debian/Ubuntu, auto-installs missing `git` and `python3`
+- if Docker is installed but the current shell does not yet have Docker-group access, transparently retries Compose with `sudo`
 
 Options:
+- `INSTALL_DOCKER=1` — on Debian/Ubuntu, auto-install Docker/Compose before pulling ChatFleet images.
 - `CREATE_ADMIN=1` — prompt/confirm admin email and create a pending admin promotion.
   The first successful login with that email is immediately upgraded to admin (no delay).
 - `ADMIN_EMAIL=you@example.com` — non‑interactive email for admin promotion.

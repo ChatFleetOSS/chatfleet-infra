@@ -19,6 +19,33 @@ die() { echo -e "[chatfleet-install][error] $*" >&2; exit 1; }
 
 need_cmd() { command -v "$1" >/dev/null 2>&1 || die "Required command '$1' not found"; }
 
+run_privileged() {
+  if [ "$(id -u)" = "0" ]; then
+    "$@"
+    return
+  fi
+  if command -v sudo >/dev/null 2>&1; then
+    sudo "$@"
+    return
+  fi
+  die "Elevated privileges required for: $*"
+}
+
+install_base_tools_if_needed() {
+  local missing=()
+  command -v git >/dev/null 2>&1 || missing+=(git)
+  command -v python3 >/dev/null 2>&1 || missing+=(python3)
+  if [ "${#missing[@]}" -eq 0 ]; then
+    return
+  fi
+  if [ ! -f /etc/debian_version ]; then
+    die "Required commands missing: ${missing[*]}. Install them manually before running the installer."
+  fi
+  log "Installing missing base tools: ${missing[*]}"
+  run_privileged apt-get update
+  run_privileged apt-get install -y ca-certificates git python3
+}
+
 read_env_value() {
   local key="$1"
   [ -f .env ] || return 0
@@ -44,6 +71,89 @@ gen_secret() {
   fi
 }
 
+docker_access_status() {
+  local err_file
+  err_file="$(mktemp)"
+  if docker info >/dev/null 2>"$err_file"; then
+    rm -f "$err_file"
+    return 0
+  fi
+  if grep -qi "permission denied" "$err_file"; then
+    rm -f "$err_file"
+    return 2
+  fi
+  rm -f "$err_file"
+  return 1
+}
+
+wait_for_docker() {
+  local status attempt
+  if docker_access_status; then
+    return 0
+  else
+    status=$?
+  fi
+  if [ "$status" = "2" ]; then
+    return 0
+  fi
+
+  if [ "$(uname -s)" = "Darwin" ] && command -v open >/dev/null 2>&1; then
+    log "Waiting for Docker Desktop to become ready..."
+    open -a Docker || true
+  elif [ -f /etc/debian_version ]; then
+    if command -v systemctl >/dev/null 2>&1; then
+      run_privileged systemctl start docker || true
+    elif command -v service >/dev/null 2>&1; then
+      run_privileged service docker start || true
+    fi
+  fi
+
+  for attempt in $(seq 1 60); do
+    if docker_access_status; then
+      return 0
+    else
+      status=$?
+    fi
+    if [ "$status" = "2" ]; then
+      return 0
+    fi
+    sleep 2
+  done
+
+  die "Docker daemon is not ready. Start Docker Desktop on macOS, or start the docker service on Linux."
+}
+
+COMPOSE_CMD=(docker compose)
+
+select_compose_cmd() {
+  local status
+  if docker_access_status; then
+    COMPOSE_CMD=(docker compose)
+    return
+  else
+    status=$?
+  fi
+
+  if [ "$status" = "2" ]; then
+    if [ "$(id -u)" = "0" ]; then
+      COMPOSE_CMD=(docker compose)
+      return
+    fi
+    if command -v sudo >/dev/null 2>&1; then
+      log "Docker requires elevated access in the current session; using sudo for Compose commands."
+      COMPOSE_CMD=(sudo docker compose)
+      return
+    fi
+    die "Docker daemon is reachable but the current user cannot access it."
+  fi
+
+  die "Docker daemon is not ready."
+}
+
+compose() {
+  "${COMPOSE_CMD[@]}" "$@"
+}
+
 install_docker_if_needed() {
   if command -v docker >/dev/null 2>&1 && docker compose version >/dev/null 2>&1; then
     return
@@ -58,9 +168,10 @@ install_docker_if_needed() {
   fi
   if [ -f /etc/debian_version ]; then
     log "Installing Docker/Compose via convenience script..."
-    if ! command -v sudo >/dev/null 2>&1; then die "sudo required to install Docker"; fi
-    curl -fsSL https://get.docker.com | sudo sh
-    sudo usermod -aG docker "$USER" 2>/dev/null || true
+    curl -fsSL https://get.docker.com | run_privileged sh
+    if [ -n "${SUDO_USER:-${USER:-}}" ]; then
+      run_privileged usermod -aG docker "${SUDO_USER:-$USER}" 2>/dev/null || true
+    fi
   else
     die "Auto-install supported only on Debian/Ubuntu. Please install Docker manually."
   fi
@@ -71,7 +182,17 @@ ensure_repo() {
     log "Syncing infra repo from local source $INFRA_SOURCE_DIR"
     [ -d "$INFRA_SOURCE_DIR" ] || die "INFRA_SOURCE_DIR does not exist: $INFRA_SOURCE_DIR"
     mkdir -p "$INSTALL_DIR"
-    cp -R "$INFRA_SOURCE_DIR"/. "$INSTALL_DIR"
+    if command -v rsync >/dev/null 2>&1; then
+      rsync -a --delete --exclude '.git/' --exclude '.env' "$INFRA_SOURCE_DIR"/ "$INSTALL_DIR"/
+    else
+      (
+        cd "$INFRA_SOURCE_DIR"
+        tar --exclude='.git' --exclude='.env' -cf - .
+      ) | (
+        cd "$INSTALL_DIR"
+        tar -xf -
+      )
+    fi
     return
   fi
   if [ -d "$INSTALL_DIR/.git" ]; then
@@ -190,24 +311,10 @@ start_stack() {
     log "Skipping docker compose pull (SKIP_PULL=1)"
   else
     log "Pulling images (tags from .env)"
-    if ! docker compose pull; then
-      if command -v sudo >/dev/null 2>&1 && [ -t 0 ]; then
-        log "docker compose pull failed; retrying with sudo"
-        sudo docker compose pull
-      else
-        die "docker compose pull failed; ensure the current user can access Docker."
-      fi
-    fi
+    compose pull
   fi
   log "Starting services"
-  if ! docker compose up -d --remove-orphans; then
-    if command -v sudo >/dev/null 2>&1 && [ -t 0 ]; then
-      log "docker compose up failed; retrying with sudo"
-      sudo docker compose up -d --remove-orphans
-    else
-      die "docker compose up failed; ensure the current user can access Docker."
-    fi
-  fi
+  compose up -d --remove-orphans
 }
 
 wait_health() {
@@ -221,7 +328,7 @@ wait_health() {
     fi
   done
   log "Health not ready; showing logs"
-  docker compose -f "$INSTALL_DIR/docker-compose.yml" logs --tail=200 api || sudo docker compose -f "$INSTALL_DIR/docker-compose.yml" logs --tail=200 api || true
+  compose -f "$INSTALL_DIR/docker-compose.yml" logs --tail=200 api || true
   return 1
 }
 
@@ -258,7 +365,7 @@ create_admin_promotion_intent() {
   # 48h validity window
   local hours=48
   # shellcheck disable=SC2016
-  if docker compose -f "$INSTALL_DIR/docker-compose.yml" exec -T mongo mongosh --quiet \
+  if compose -f "$INSTALL_DIR/docker-compose.yml" exec -T mongo mongosh --quiet \
     -u "$MONGO_ROOT_USER" -p "$MONGO_ROOT_PASSWORD" --authenticationDatabase admin \
     --eval 'db=db.getSiblingDB("chatfleet"); var now=new Date(); var exp=new Date(now.getTime()+('$hours')*3600*1000); db.admin_promotions.updateOne({email:"'$email'"},{ $setOnInsert:{email:"'$email'", created_at:now, expires_at:exp, redeemed:false}},{upsert:true}); print("INTENT_OK");' \
     | grep -q INTENT_OK; then
@@ -281,7 +388,7 @@ promote_admin_if_present() {
   # Try for up to 90s to find and promote
   for i in $(seq 1 18); do
     # shellcheck disable=SC2016
-    if docker compose -f "$INSTALL_DIR/docker-compose.yml" exec -T mongo mongosh --quiet \
+    if compose -f "$INSTALL_DIR/docker-compose.yml" exec -T mongo mongosh --quiet \
       -u "$MONGO_ROOT_USER" -p "$MONGO_ROOT_PASSWORD" --authenticationDatabase admin \
       --eval 'db=db.getSiblingDB("chatfleet"); var u=db.users.findOne({email:"'$email'"}); if(u){ db.users.updateOne({email:"'$email'"}, {$set:{role:"admin"}}); print("PROMOTED"); } else { print("NOTFOUND"); }' \
       | grep -q PROMOTED; then
@@ -295,10 +402,13 @@ promote_admin_if_present() {
 }
 
 main() {
+  install_base_tools_if_needed
   need_cmd git; need_cmd curl; need_cmd python3
   install_docker_if_needed
   need_cmd docker
   docker compose version >/dev/null 2>&1 || die "Docker Compose v2 not available"
+  wait_for_docker
+  select_compose_cmd
   ensure_repo
   ensure_env
   repair_mongo_uri_if_needed
@@ -312,7 +422,7 @@ main() {
         --expected-api "$API_TAG" \
         --expected-web "$WEB_TAG"
     fi
-    IP=$(hostname -I 2>/dev/null | awk '{print $1}')
+    IP="$(hostname -I 2>/dev/null | awk '{print $1}' || true)"
     HOST=${IP:-localhost}
     echo
     echo "ChatFleet is running: http://${HOST}:8080"

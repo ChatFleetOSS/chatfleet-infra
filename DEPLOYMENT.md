@@ -37,7 +37,9 @@ curl -fsSL "https://raw.githubusercontent.com/ChatFleetOSS/chatfleet-infra/main/
 Defaults:
 - Installs to `$HOME/chatfleet-infra` (no sudo). Use `USE_SYSTEM=1` to install to `/opt/chatfleet-infra` (prompts for sudo once).
 - Uses the committed `stable` channel from `channels/stable.env`; you can override via `CHANNEL`, `API_TAG`, and `WEB_TAG`.
-- On Linux (Debian/Ubuntu), set `INSTALL_DOCKER=1` to auto-install Docker; on macOS, start Docker Desktop manually.
+- On Linux (Debian/Ubuntu), set `INSTALL_DOCKER=1` to auto-install Docker; the installer also bootstraps missing `git` and `python3`.
+- If Docker is installed but the current session does not yet have Docker-group access, the installer retries Compose with `sudo`.
+- On macOS, start Docker Desktop manually or let the installer try to open it and wait for readiness.
 - Verifies that `/api/health` and `/build-info` return the expected build versions after startup.
 
 Admin setup:
