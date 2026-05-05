@@ -51,7 +51,7 @@ CHANNEL=edge $HOME/chatfleet-infra/upgrade.sh
 Pin a specific pair explicitly:
 
 ```
-API_TAG=v0.1.14 WEB_TAG=v0.1.16 $HOME/chatfleet-infra/upgrade.sh
+API_TAG=v0.1.17 WEB_TAG=v0.1.19 $HOME/chatfleet-infra/upgrade.sh
 ```
 
 ## Release Process

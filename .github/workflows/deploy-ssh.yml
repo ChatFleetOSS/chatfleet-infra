@@ -66,7 +66,15 @@ jobs:
               "$IM_WEB"
 
             CHANNEL="$CHATFLEET_CHANNEL" API_TAG="$API_TAG" WEB_TAG="$WEB_TAG" ./upgrade.sh /opt/chatfleet-infra
-            python3 ./scripts/verify_stack.py \
-              --base-url http://localhost:8080 \
-              --expected-api "$API_TAG" \
-              --expected-web "$WEB_TAG"
+            verify_args=(--base-url http://localhost:8080)
+            if [ "$API_TAG" = "edge" ]; then
+              verify_args+=(--expected-api-prefix sha-)
+            else
+              verify_args+=(--expected-api "$API_TAG")
+            fi
+            if [ "$WEB_TAG" = "edge" ]; then
+              verify_args+=(--expected-web-prefix sha-)
+            else
+              verify_args+=(--expected-web "$WEB_TAG")
+            fi
+            python3 ./scripts/verify_stack.py "${verify_args[@]}"

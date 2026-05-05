@@ -41,7 +41,7 @@ This is the source of truth for promoting backend/frontend versions into `chatfl
 For local dry-runs or preflight checks:
 
 ```bash
-python3 ./scripts/promote_channel.py --channel stable --api-tag v0.1.14 --web-tag v0.1.16 --verify-only
+python3 ./scripts/promote_channel.py --channel stable --api-tag v0.1.17 --web-tag v0.1.19 --verify-only
 python3 ./scripts/test_promotion_flow.py
 ```
 

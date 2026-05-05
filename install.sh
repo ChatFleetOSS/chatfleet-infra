@@ -332,6 +332,24 @@ wait_health() {
   return 1
 }
 
+verify_stack_versions() {
+  local args=("--base-url" "http://localhost:8080")
+
+  if [ "$API_TAG" = "edge" ]; then
+    args+=("--expected-api-prefix" "sha-")
+  else
+    args+=("--expected-api" "$API_TAG")
+  fi
+
+  if [ "$WEB_TAG" = "edge" ]; then
+    args+=("--expected-web-prefix" "sha-")
+  else
+    args+=("--expected-web" "$WEB_TAG")
+  fi
+
+  python3 "$INSTALL_DIR/scripts/verify_stack.py" "${args[@]}"
+}
+
 prompt_admin_email() {
   if [ -n "${ADMIN_EMAIL:-}" ]; then
     printf "%s" "$ADMIN_EMAIL"
@@ -417,10 +435,7 @@ main() {
     if [ "$SKIP_VERIFY" = "1" ]; then
       log "Skipping post-install version verification (SKIP_VERIFY=1)"
     else
-      python3 "$INSTALL_DIR/scripts/verify_stack.py" \
-        --base-url "http://localhost:8080" \
-        --expected-api "$API_TAG" \
-        --expected-web "$WEB_TAG"
+      verify_stack_versions
     fi
     IP="$(hostname -I 2>/dev/null | awk '{print $1}' || true)"
     HOST=${IP:-localhost}

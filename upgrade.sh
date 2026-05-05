@@ -28,6 +28,24 @@ upsert_env_value() {
   rm -f .env.bak || true
 }
 
+verify_stack_versions() {
+  local args=("--base-url" "http://localhost:8080")
+
+  if [ "$API_TAG" = "edge" ]; then
+    args+=("--expected-api-prefix" "sha-")
+  else
+    args+=("--expected-api" "$API_TAG")
+  fi
+
+  if [ "$WEB_TAG" = "edge" ]; then
+    args+=("--expected-web-prefix" "sha-")
+  else
+    args+=("--expected-web" "$WEB_TAG")
+  fi
+
+  python3 "$DIR/scripts/verify_stack.py" "${args[@]}"
+}
+
 [ -d "$DIR" ] || die "Install directory not found: $DIR"
 
 cd "$DIR"
@@ -53,8 +71,5 @@ upsert_env_value WEB_TAG "$WEB_TAG"
 log "Deploying channel=${CHATFLEET_CHANNEL} api=${API_TAG} web=${WEB_TAG}"
 docker compose pull
 docker compose up -d --remove-orphans
-python3 "$DIR/scripts/verify_stack.py" \
-  --base-url "http://localhost:8080" \
-  --expected-api "$API_TAG" \
-  --expected-web "$WEB_TAG"
+verify_stack_versions
 log "Done."

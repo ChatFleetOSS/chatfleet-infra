@@ -34,3 +34,11 @@ Pointers
 - Docs: README.md, DEPLOYMENT.md, docs/DEVELOPER_SETUP.md
 - Backend CI: chatfleet-api/.github/workflows/ci.yml
 - Frontend CI: chatfleet-web/.github/workflows/ci.yml
+
+2026-05-05 — Promote OpenDocument curl install
+- Stable channel promoted to API v0.1.17 / Web v0.1.19 so the default curl installer pulls the OpenDocument-capable images.
+- install.sh and upgrade.sh now verify mutable edge builds with `sha-` version prefixes instead of comparing runtime build versions to the literal tag `edge`.
+- SSH deploy verification uses the same edge-prefix behavior.
+- Docs examples updated to the OpenDocument release pair.
+- Local checks: bash -n install.sh upgrade.sh OK; python compile of helper scripts OK; stable registry validation OK; promotion flow test OK; verify_stack prefix behavior OK with a local mock HTTP server.
+- Limitation: full Docker install smoke was not run locally because Docker daemon was unavailable.
