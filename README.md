@@ -14,6 +14,12 @@ That guide includes:
 
 Release promotion and anti-drift process: `docs/RELEASE_PROCESS.md`.
 
+Client delivery documentation: `docs/client-delivery/README.md`.
+This package includes the technical architecture, installation and upgrade guide,
+operations runbooks, API contracts, RAG/OpenDocument behavior, security notes,
+CI/CD release process, frontend integration notes, and acceptance checklist for
+the stable API/Web pair currently exposed by the installer.
+
 ## Quick Install (HTTP :8080)
 
 ```
