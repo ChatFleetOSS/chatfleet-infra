@@ -42,3 +42,14 @@ Pointers
 - Docs examples updated to the OpenDocument release pair.
 - Local checks: bash -n install.sh upgrade.sh OK; python compile of helper scripts OK; stable registry validation OK; promotion flow test OK; verify_stack prefix behavior OK with a local mock HTTP server.
 - Limitation: full Docker install smoke was not run locally because Docker daemon was unavailable.
+
+2026-05-05 — Client technical documentation package
+- Added public client delivery documentation under `docs/client-delivery/`.
+- The package covers: executive technical summary, architecture, install/upgrade, operations runbooks, API contracts, RAG/OpenDocument ingestion, configurable RAG prompts, security, CI/CD releases, frontend integration, tests/acceptance, and diagnostic commands.
+- README links to `docs/client-delivery/README.md` for GitHub discoverability.
+- Commit pushed to `main`: `b6e92d3 Add client technical documentation package`.
+- Validation:
+  - `git diff --check` OK.
+  - `scripts/resolve-channel.sh` resolves stable to API `v0.1.18` and Web `v0.1.20`.
+  - Backend route list was introspected from FastAPI using the backend virtualenv and reflected in the API documentation.
+  - Infra CI run `25382855811` passed, including stable validation and smoke install/version verification.
