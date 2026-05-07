@@ -1,9 +1,13 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-DEFAULT_DIR="$HOME/chatfleet-infra"
-if [ ! -d "$DEFAULT_DIR" ] && [ -d /opt/chatfleet-infra ]; then
-  DEFAULT_DIR="/opt/chatfleet-infra"
+SYSTEM_INSTALL_DIR="${CHATFLEET_SYSTEM_INSTALL_DIR:-/opt/chatfleet-infra}"
+HOME_INSTALL_DIR="${CHATFLEET_HOME_INSTALL_DIR:-$HOME/chatfleet-infra}"
+DEFAULT_DIR="$HOME_INSTALL_DIR"
+DEFAULT_DIR_SELECTED_LEGACY=0
+if [ -f "$SYSTEM_INSTALL_DIR/.env" ] || [ -d "$SYSTEM_INSTALL_DIR/.git" ]; then
+  DEFAULT_DIR="$SYSTEM_INSTALL_DIR"
+  DEFAULT_DIR_SELECTED_LEGACY=1
 fi
 
 DIR="${1:-${INSTALL_DIR:-$DEFAULT_DIR}}"
@@ -47,6 +51,10 @@ verify_stack_versions() {
 }
 
 [ -d "$DIR" ] || die "Install directory not found: $DIR"
+
+if [ "$DEFAULT_DIR_SELECTED_LEGACY" = "1" ] && [ -z "${1:-}" ] && [ -z "${INSTALL_DIR:-}" ]; then
+  log "Detected an existing system install at $DIR; reusing it to preserve .env secrets and Docker volumes. Pass a path or set INSTALL_DIR to override."
+fi
 
 cd "$DIR"
 if [ -d .git ]; then

@@ -35,7 +35,7 @@ For quick local/server setup without SSH deploy, run:
 curl -fsSL "https://raw.githubusercontent.com/ChatFleetOSS/chatfleet-infra/main/install.sh?$(date +%s)" | bash
 
 Defaults:
-- Installs to `$HOME/chatfleet-infra` (no sudo). Use `USE_SYSTEM=1` to install to `/opt/chatfleet-infra` (prompts for sudo once).
+- Installs to `$HOME/chatfleet-infra` (no sudo) on new machines, but reuses an existing `/opt/chatfleet-infra` installation when present to preserve the original `.env` secrets and Docker volumes. Use `INSTALL_DIR=/custom/path` to override auto-detection, or `USE_SYSTEM=1` to force `/opt/chatfleet-infra`.
 - Uses the committed `stable` channel from `channels/stable.env`; you can override via `CHANNEL`, `API_TAG`, and `WEB_TAG`.
 - On Linux (Debian/Ubuntu), set `INSTALL_DOCKER=1` to auto-install Docker; the installer also bootstraps missing `git` and `python3`.
 - If Docker is installed but the current session does not yet have Docker-group access, the installer retries Compose with `sudo`.
@@ -70,6 +70,7 @@ API_TAG=v0.1.17 WEB_TAG=v0.1.19 $HOME/chatfleet-infra/upgrade.sh
 
 Notes:
 - Do not delete volumes during upgrades; that would wipe Mongo data.
+- If an older install lives in `/opt/chatfleet-infra`, run the curl installer or `upgrade.sh` without `INSTALL_DIR`; it will reuse `/opt` by default. Passing `INSTALL_DIR=$HOME/chatfleet-infra` intentionally starts from that directory and must use matching Mongo secrets.
 - `upgrade.sh` rewrites `.env` so the deployed `CHATFLEET_CHANNEL`, `API_TAG`, and `WEB_TAG` stay explicit.
 - Health should return `status: ok` after the restart, and `/build-info` should match the expected web tag.
 

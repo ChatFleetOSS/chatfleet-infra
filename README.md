@@ -28,6 +28,7 @@ curl -fsSL "https://raw.githubusercontent.com/ChatFleetOSS/chatfleet-infra/main/
 
 Default behavior:
 - installs from the committed `stable` channel in `channels/stable.env`
+- reuses an existing `/opt/chatfleet-infra` install when found, so rerunning the curl command on older machines preserves the original `.env` secrets and Docker volumes
 - writes `CHATFLEET_CHANNEL`, `API_TAG`, and `WEB_TAG` into `.env`
 - verifies the live API and web build versions after startup
 - expects `:8080` to be free and enough local disk for the first image pull
@@ -35,6 +36,7 @@ Default behavior:
 - if Docker is installed but the current shell does not yet have Docker-group access, transparently retries Compose with `sudo`
 
 Options:
+- `INSTALL_DIR=/path/to/chatfleet-infra` — force a specific install directory when you intentionally want to override auto-detection.
 - `INSTALL_DOCKER=1` — on Debian/Ubuntu, auto-install Docker/Compose before pulling ChatFleet images.
 - `CREATE_ADMIN=1` — prompt/confirm admin email and create a pending admin promotion.
   The first successful login with that email is immediately upgraded to admin (no delay).

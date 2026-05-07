@@ -2,11 +2,20 @@
 set -euo pipefail
 
 # Install location
-# Default to user home for least-privilege installs; set USE_SYSTEM=1 to opt into /opt
-if [ "${USE_SYSTEM:-0}" = "1" ]; then
-  INSTALL_DIR="${INSTALL_DIR:-/opt/chatfleet-infra}"
+# Explicit INSTALL_DIR wins. Otherwise, preserve legacy /opt installs before
+# falling back to the least-privilege HOME default.
+SYSTEM_INSTALL_DIR="${CHATFLEET_SYSTEM_INSTALL_DIR:-/opt/chatfleet-infra}"
+HOME_INSTALL_DIR="${CHATFLEET_HOME_INSTALL_DIR:-$HOME/chatfleet-infra}"
+INSTALL_DIR_SELECTED_LEGACY=0
+if [ -n "${INSTALL_DIR:-}" ]; then
+  INSTALL_DIR="$INSTALL_DIR"
+elif [ "${USE_SYSTEM:-0}" = "1" ]; then
+  INSTALL_DIR="$SYSTEM_INSTALL_DIR"
+elif [ -f "$SYSTEM_INSTALL_DIR/.env" ] || [ -d "$SYSTEM_INSTALL_DIR/.git" ]; then
+  INSTALL_DIR="$SYSTEM_INSTALL_DIR"
+  INSTALL_DIR_SELECTED_LEGACY=1
 else
-  INSTALL_DIR="${INSTALL_DIR:-$HOME/chatfleet-infra}"
+  INSTALL_DIR="$HOME_INSTALL_DIR"
 fi
 INFRA_REPO_URL="${INFRA_REPO_URL:-https://github.com/ChatFleetOSS/chatfleet-infra}"
 INFRA_SOURCE_DIR="${INFRA_SOURCE_DIR:-}"
@@ -420,6 +429,9 @@ promote_admin_if_present() {
 }
 
 main() {
+  if [ "$INSTALL_DIR_SELECTED_LEGACY" = "1" ]; then
+    log "Detected an existing system install at $INSTALL_DIR; reusing it to preserve .env secrets and Docker volumes. Set INSTALL_DIR to override."
+  fi
   install_base_tools_if_needed
   need_cmd git; need_cmd curl; need_cmd python3
   install_docker_if_needed
@@ -468,4 +480,6 @@ main() {
   fi
 }
 
-main "$@"
+if [ "${CHATFLEET_INSTALLER_NO_MAIN:-0}" != "1" ]; then
+  main "$@"
+fi

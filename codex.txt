@@ -53,3 +53,10 @@ Pointers
   - `scripts/resolve-channel.sh` resolves stable to API `v0.1.18` and Web `v0.1.20`.
   - Backend route list was introspected from FastAPI using the backend virtualenv and reflected in the API documentation.
   - Infra CI run `25382855811` passed, including stable validation and smoke install/version verification.
+
+2026-05-07 — Fix curl upgrade path for legacy /opt installs
+- Root cause isolated for clients that had an older functional install in `/opt/chatfleet-infra`: rerunning the latest curl installer could default to `$HOME/chatfleet-infra`, generate a new `.env`, and restart the shared `chatfleet` Compose project against existing Mongo volumes with mismatched secrets.
+- `install.sh` now reuses an existing `/opt/chatfleet-infra` install unless `INSTALL_DIR` is explicitly set; `upgrade.sh` uses the same legacy detection.
+- Added `scripts/test_install_dir_resolution.py` to cover the n-1 -> n regression: pre-patch selection chose `$HOME/chatfleet-infra` despite an existing `/opt/chatfleet-infra`; patched selection reuses `/opt`. It also covers HOME fallback, explicit `INSTALL_DIR`, and `USE_SYSTEM=1`.
+- Validation: `bash -n install.sh upgrade.sh` OK; `python3 scripts/test_install_dir_resolution.py` OK; helper script `py_compile` OK.
+- Limitation: Docker daemon was unavailable locally, so full container smoke was not run.
