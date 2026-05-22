@@ -80,6 +80,19 @@ gen_secret() {
   fi
 }
 
+app_mongo_uri() {
+  [ -n "${MONGO_APP_PASSWORD:-}" ] || die "MONGO_APP_PASSWORD is empty; cannot build MONGO_URI"
+  local pw_enc
+  pw_enc=$(env MONGO_APP_PASSWORD="${MONGO_APP_PASSWORD}" python3 - <<'PY'
+import os, urllib.parse
+val = os.environ.get('MONGO_APP_PASSWORD', '')
+print(urllib.parse.quote(val, safe=''))
+PY
+  )
+  if [ -z "${pw_enc}" ]; then pw_enc="${MONGO_APP_PASSWORD}"; fi
+  printf 'mongodb://chatfleet:%s@mongo:27017/chatfleet?authSource=chatfleet\n' "$pw_enc"
+}
+
 docker_access_status() {
   local err_file
   err_file="$(mktemp)"
@@ -247,16 +260,8 @@ ensure_env() {
     upsert_env_value MONGO_ROOT_USER "$MONGO_ROOT_USER"
     upsert_env_value MONGO_ROOT_PASSWORD "$MONGO_ROOT_PASSWORD"
     upsert_env_value MONGO_APP_PASSWORD "$MONGO_APP_PASSWORD"
-    # Compose prefers an explicit, URL-encoded URI for safety
-    PW_ENC=$(env MONGO_APP_PASSWORD="${MONGO_APP_PASSWORD}" python3 - <<'PY'
-import os, urllib.parse
-val = os.environ.get('MONGO_APP_PASSWORD', '')
-print(urllib.parse.quote(val, safe=''))
-PY
-    )
-    # Fallback if encoding yields empty
-    if [ -z "${PW_ENC}" ]; then PW_ENC="${MONGO_APP_PASSWORD}"; fi
-    upsert_env_value MONGO_URI "mongodb://chatfleet:${PW_ENC}@mongo:27017/chatfleet?authSource=chatfleet"
+    # Compose prefers an explicit, URL-encoded URI for safety.
+    upsert_env_value MONGO_URI "$(app_mongo_uri)"
     log "Wrote secrets to $INSTALL_DIR/.env"
   else
     log ".env already exists; not modifying"
@@ -284,32 +289,45 @@ repair_mongo_uri_if_needed() {
   # shellcheck disable=SC2046
   . ./.env 2>/dev/null || true
   set -e
+  local current_uri target_uri
+  current_uri="$(read_env_value MONGO_URI)"
   if ! grep -q '^MONGO_URI=' .env; then
-    PW_ENC=$(env MONGO_APP_PASSWORD="${MONGO_APP_PASSWORD}" python3 - <<'PY'
-import os, urllib.parse
-val = os.environ.get('MONGO_APP_PASSWORD', '')
-print(urllib.parse.quote(val, safe=''))
-PY
-    )
-    if [ -z "${PW_ENC}" ]; then PW_ENC="${MONGO_APP_PASSWORD}"; fi
-    echo "MONGO_URI=mongodb://chatfleet:${PW_ENC}@mongo:27017/chatfleet?authSource=chatfleet" >> .env
+    target_uri="$(app_mongo_uri)"
+    echo "MONGO_URI=${target_uri}" >> .env
     log "Added MONGO_URI to .env"
     return
   fi
-  # If password contains characters that likely need encoding and URI doesn't contain %
-  if printf '%s' "${MONGO_APP_PASSWORD:-}" | grep -q '[^A-Za-z0-9_]'; then
-    if ! grep -q '%40\|%2F\|%3A\|%2B\|%3D\|%25' .env; then
-      PW_ENC=$(env MONGO_APP_PASSWORD="${MONGO_APP_PASSWORD}" python3 - <<'PY'
-import os, urllib.parse
-val = os.environ.get('MONGO_APP_PASSWORD', '')
-print(urllib.parse.quote(val, safe=''))
-PY
-      )
-      if [ -z "${PW_ENC}" ]; then PW_ENC="${MONGO_APP_PASSWORD}"; fi
-      sed -i.bak "s|^MONGO_URI=.*$|MONGO_URI=mongodb://chatfleet:${PW_ENC}@mongo:27017/chatfleet?authSource=chatfleet|" .env || true
-      rm -f .env.bak || true
-      log "Updated MONGO_URI with URL-encoded password"
-    fi
+
+  if [ -z "$current_uri" ]; then
+    target_uri="$(app_mongo_uri)"
+    upsert_env_value MONGO_URI "$target_uri"
+    log "Updated blank MONGO_URI"
+    return
+  fi
+
+  if [ "${REPAIR_MONGO_URI:-0}" = "1" ]; then
+    target_uri="$(app_mongo_uri)"
+    case "$current_uri" in
+      mongodb://chatfleet:*@mongo:27017/chatfleet*authSource=admin*)
+        upsert_env_value MONGO_URI "$target_uri"
+        log "Updated MONGO_URI authSource to chatfleet"
+        return
+        ;;
+    esac
+  fi
+
+  # If password contains characters that likely need encoding and the compose
+  # app-user URI still contains the raw password, rewrite only when explicitly requested.
+  if [ "${REPAIR_MONGO_URI:-0}" = "1" ] && printf '%s' "${MONGO_APP_PASSWORD:-}" | grep -q '[^A-Za-z0-9_]'; then
+    target_uri="${target_uri:-$(app_mongo_uri)}"
+    case "$current_uri" in
+      mongodb://chatfleet:*@mongo:27017/chatfleet*)
+        if ! grep -q '%40\|%2F\|%3A\|%2B\|%3D\|%25' .env; then
+          upsert_env_value MONGO_URI "$target_uri"
+          log "Updated MONGO_URI with URL-encoded password"
+        fi
+        ;;
+    esac
   fi
 }
 

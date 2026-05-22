@@ -41,6 +41,7 @@ Defaults:
 - If Docker is installed but the current session does not yet have Docker-group access, the installer retries Compose with `sudo`.
 - On macOS, start Docker Desktop manually or let the installer try to open it and wait for readiness.
 - Verifies that `/api/health` and `/build-info` return the expected build versions after startup.
+- Existing non-empty `MONGO_URI` values are preserved. The installer only fills missing or blank `MONGO_URI` automatically; use `REPAIR_MONGO_URI=1` only when you explicitly want to normalize the standard compose app-user URI.
 
 Admin setup:
 - To have the first admin available immediately on login, pass `CREATE_ADMIN=1 ADMIN_EMAIL=you@example.com` to the installer. The installer creates a 48h promotion intent in Mongo; the first successful login with that email is upgraded to admin before the token is issued (no delay).
@@ -71,6 +72,8 @@ API_TAG=v0.1.17 WEB_TAG=v0.1.19 $HOME/chatfleet-infra/upgrade.sh
 Notes:
 - Do not delete volumes during upgrades; that would wipe Mongo data.
 - If an older install lives in `/opt/chatfleet-infra`, run the curl installer or `upgrade.sh` without `INSTALL_DIR`; it will reuse `/opt` by default. Passing `INSTALL_DIR=$HOME/chatfleet-infra` intentionally starts from that directory and must use matching Mongo secrets.
+- Preserve the client's existing non-empty `MONGO_URI`, even if it uses `authSource=admin`, unless Mongo authentication proves that URI is wrong for the existing volume.
+- Before changing RAG runtime paths, verify `admin_settings.runtime.index_dir` and `upload_dir` in Mongo against the mounted API paths `/var/lib/chatfleet/faiss` and `/var/lib/chatfleet/uploads`.
 - `upgrade.sh` rewrites `.env` so the deployed `CHATFLEET_CHANNEL`, `API_TAG`, and `WEB_TAG` stay explicit.
 - Health should return `status: ok` after the restart, and `/build-info` should match the expected web tag.
 
