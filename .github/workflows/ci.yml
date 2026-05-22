@@ -31,6 +31,12 @@ jobs:
             --verify-only
       - name: Exercise promotion flow across three versions
         run: python3 ./scripts/test_promotion_flow.py
+      - name: Installer legacy upgrade regression tests
+        run: |
+          bash -n install.sh upgrade.sh
+          python3 ./scripts/test_install_dir_resolution.py
+          python3 ./scripts/test_mongo_uri_repair.py
+          python3 ./scripts/test_legacy_upgrade_compat.py
 
   smoke-stable:
     runs-on: ubuntu-latest
