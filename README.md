@@ -79,3 +79,7 @@ Bootstrap order for the first rollout of this process:
 2. Merge backend and frontend to `main` so their `publish-main` jobs create the `edge` images.
 3. Run infra `workflow_dispatch` (or wait for the nightly schedule) to validate the `edge` channel.
 4. Promote the desired semver pair through the `Promote Channel` workflow, which opens the PR updating `channels/stable.env`.
+
+## License
+
+ChatFleet Infra is open source under the Apache License, Version 2.0. See `LICENSE`.
