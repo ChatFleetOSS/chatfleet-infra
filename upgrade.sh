@@ -50,6 +50,21 @@ verify_stack_versions() {
   python3 "$DIR/scripts/verify_stack.py" "${args[@]}"
 }
 
+wait_health() {
+  local url="http://localhost:8080/api/health"
+  log "Waiting for health at $url"
+  for _ in $(seq 1 60); do
+    sleep 2
+    if curl -fsS "$url" >/dev/null 2>&1; then
+      log "Health OK"
+      return 0
+    fi
+  done
+  log "Health not ready; showing API logs"
+  docker compose -f "$DIR/docker-compose.yml" logs --tail=200 api || true
+  return 1
+}
+
 [ -d "$DIR" ] || die "Install directory not found: $DIR"
 
 if [ "$DEFAULT_DIR_SELECTED_LEGACY" = "1" ] && [ -z "${1:-}" ] && [ -z "${INSTALL_DIR:-}" ]; then
@@ -79,5 +94,6 @@ upsert_env_value WEB_TAG "$WEB_TAG"
 log "Deploying channel=${CHATFLEET_CHANNEL} api=${API_TAG} web=${WEB_TAG}"
 docker compose pull
 docker compose up -d --remove-orphans
+wait_health
 verify_stack_versions
 log "Done."
